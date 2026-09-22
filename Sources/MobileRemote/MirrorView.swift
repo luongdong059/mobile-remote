@@ -27,6 +27,8 @@ protocol MirrorInputSink: AnyObject {
 final class MirrorView: NSView, @preconcurrency NSTextInputClient {
     let renderer = VideoLayerRenderer()
     var input: MirrorInputSink?
+    /// Receives files dropped on the video; nil means drops are refused.
+    var onDropFiles: (([URL]) -> Void)?
     /// Text the input method is still composing (shown underlined in a text
     /// view); sent only once it is committed.
     private var marked = ""
@@ -61,6 +63,8 @@ final class MirrorView: NSView, @preconcurrency NSTextInputClient {
         recordingBadge.isHidden = true
         recordingBadge.translatesAutoresizingMaskIntoConstraints = false
         addSubview(recordingBadge)
+
+        registerForDraggedTypes([.fileURL])
 
         NSLayoutConstraint.activate([
             statusLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
@@ -127,6 +131,23 @@ final class MirrorView: NSView, @preconcurrency NSTextInputClient {
     /// Call with the size of every new video session.
     func setVideoSize(width: Int, height: Int) {
         input?.videoSizeChanged(width: width, height: height)
+    }
+
+    // MARK: File drops
+
+    private func droppedFiles(_ sender: NSDraggingInfo) -> [URL] {
+        sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onDropFiles != nil && !droppedFiles(sender).isEmpty ? .copy : []
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let files = droppedFiles(sender)
+        guard let onDropFiles, !files.isEmpty else { return false }
+        onDropFiles(files)
+        return true
     }
 
     // MARK: Keyboard

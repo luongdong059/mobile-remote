@@ -86,6 +86,7 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
             mirrorView.input = sink
             controlKeys = DeviceKey.allCases
             refreshControls()
+            mirrorView.onDropFiles = { [weak self] urls in self?.send(files: urls, to: device.serial) }
             pipeline.start()
             isScreenOff = false
         case .ios(let device):
@@ -180,6 +181,19 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
             mirrorView.showToast("Đang chờ khung hình để bắt đầu ghi…")
         }
         refreshControls()
+    }
+
+    /// Dropped files go over one at a time, with a toast per result.
+    private func send(files: [URL], to serial: String) {
+        mirrorView.showToast(files.count == 1 ? "Đang gửi \(files[0].lastPathComponent)…" : "Đang gửi \(files.count) file…")
+        DispatchQueue.global(qos: .userInitiated).async {
+            for url in files {
+                let outcome = AndroidFileTransfer.send(url, to: serial)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { [weak self] in self?.mirrorView.showToast(outcome.detail) }
+                }
+            }
+        }
     }
 
     @objc func revealRecordings(_ sender: Any?) {

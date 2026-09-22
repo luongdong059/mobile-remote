@@ -29,6 +29,8 @@ struct MRCtl {
           type                        type text through the app's key translator
           pinch                       two-finger pinch around a point (Android)
           screen                      --off / --on: phone display power (Android)
+          push                        --file PATH: what a drop on the window does
+                                      (APK → install, else → /sdcard/Download)
 
         common options:
           -s, --serial SERIAL         device to use (default: the only USB device)
@@ -88,6 +90,7 @@ struct MRCtl {
             case "type": try typeText(arguments)
             case "pinch": try pinch(arguments)
             case "screen": try screen(arguments)
+            case "push": try push(arguments)
             default: print(usage)
             }
         } catch {
@@ -489,6 +492,17 @@ struct MRCtl {
         try withControl(arguments) { _, _, send in
             try send([.setDisplayPower(on: !off)])
         }
+    }
+
+    static func push(_ arguments: Arguments) throws {
+        guard let path = try arguments.string("file") else { throw CLIError("'--file' is required") }
+        let adb = ADBClient()
+        try adb.ensureServerRunning()
+        let device = try pickDevice(try adb.devices(), requested: try arguments.string("serial"))
+        let started = Date()
+        let outcome = AndroidFileTransfer.send(URL(fileURLWithPath: path), to: device.serial, adb: adb)
+        print(String(format: "%@ (%.0f ms)", outcome.detail, since(started)))
+        if !outcome.succeeded { exit(1) }
     }
 
     static func key(_ arguments: Arguments) throws {

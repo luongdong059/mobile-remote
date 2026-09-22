@@ -16,7 +16,8 @@ Phía điện thoại chạy `scrcpy-server` v4.1 (Apache-2.0, ghim cứng phiê
 - [x] Ghi màn hình ra MP4 (Android: chép thẳng luồng H.264/H.265, không nén lại; iPhone: nén HEVC phần cứng)
 - [x] Pinch-zoom bằng trackpad (Android), tắt màn hình điện thoại khi phản chiếu, cửa sổ Cài đặt (⌘,)
 - [x] Âm thanh Android (PCM thô từ scrcpy, phát qua AVAudioEngine, ghi AAC vào MP4) — tắt mặc định, bật trong Cài đặt; chưa kiểm chứng trên máy thật
-- [ ] Giai đoạn 4: âm thanh iPhone, kéo thả file
+- [x] Kéo thả file vào cửa sổ Android: APK thì cài (`pm install -r`), file khác chép vào Download
+- [ ] Còn lại: âm thanh iPhone, adb qua Wi-Fi
 - [ ] Giai đoạn 5: đóng gói, ký và notarize
 
 ## Cấu trúc
@@ -58,6 +59,7 @@ swift test
 .build/debug/mrctl scroll --at 540,1300 --dy -3
 .build/debug/mrctl key --name back
 .build/debug/mrctl type --text "xin chào" --enter
+.build/debug/mrctl push --file app.apk            # đúng đường đi của kéo thả
 ```
 
 Chạy `mrctl` không kèm tham số để xem đầy đủ tùy chọn.
@@ -101,6 +103,7 @@ Giao diện dùng Liquid Glass trên macOS 26. Trên macOS 14 và 15, các thàn
 | ⌘C / ⌘X | Android: sao chép / cắt trên máy, văn bản về clipboard của Mac (có thông báo) |
 | ⌘V | Dán clipboard của Mac vào máy |
 | ⌘A / ⌘Z / ⇧⌘Z | Chọn tất cả / hoàn tác / làm lại (Android, gửi như Ctrl+A/Z) |
+| Kéo thả file vào màn hình (Android) | `.apk` được cài đặt (thay bản cũ nếu có); file khác chép vào `/sdcard/Download`, có thông báo kết quả |
 | Nút ghi hoặc ⌃⌘R | Bắt đầu / dừng ghi màn hình. File MP4 lưu vào `~/Movies/Mobile Remote/`, tên theo máy và thời điểm; menu Thiết bị › Mở thư mục ghi hình |
 
 Ghi hình có âm thanh khi bật âm thanh trong Cài đặt (Android). Với Android, luồng video từ điện thoại được chép nguyên vào file (codec và độ phân giải đúng như đang phản chiếu, gần như không tốn CPU); ghi bắt đầu ở khung hình chính kế tiếp (app xin ngay, khoảng 0,2–1 giây) và tự dừng nếu màn hình đổi kích thước (xoay). Với iPhone, khung hình thô được nén HEVC phần cứng ở độ phân giải gốc, khoảng 12 Mbps.
