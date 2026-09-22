@@ -48,6 +48,7 @@ struct MRCtl {
         stream options:
           --seconds N                 how long to run (default 10)
           --reset-at N                send RESET_VIDEO after N seconds
+          --screen-off                turn the phone's panel off for the session
           --dump FILE                 write the raw Annex B stream to FILE
           --record FILE.mp4           stream / ios: record the session to an MP4
 
@@ -190,6 +191,7 @@ struct MRCtl {
                 case .session(let width, let height, _):
                     print(String(format: "session %dx%d at %.0f ms", width, height, since(launch)))
                     if nudge { FirstFrameNudge.start(on: session) { gotFrame.isOpen } }
+                    if try arguments.string("screen-off") != nil { try session.send(.setDisplayPower(on: false)) }
                 case .media(let media):
                     try dump?.write(contentsOf: media.payload)
                     bytes += media.payload.count
@@ -667,7 +669,7 @@ struct Arguments {
     private var values: [String: String] = [:]
     private static let aliases = ["-s": "serial", "-o": "output"]
     /// Options that take no value.
-    private static let flags: Set<String> = ["enter", "off", "on", "audio"]
+    private static let flags: Set<String> = ["enter", "off", "on", "audio", "screen-off"]
 
     init(_ raw: [String]) throws {
         var iterator = raw.makeIterator()

@@ -15,7 +15,7 @@ Phía điện thoại chạy `scrcpy-server` v4.1 (Apache-2.0, ghim cứng phiê
 - [x] Giai đoạn 3: bàn phím (kể cả tiếng Việt qua bộ gõ của macOS), clipboard hai chiều, tự kết nối lại khi rớt phiên
 - [x] Ghi màn hình ra MP4 (Android: chép thẳng luồng H.264/H.265, không nén lại; iPhone: nén HEVC phần cứng)
 - [x] Pinch-zoom bằng trackpad (Android), tắt màn hình điện thoại khi phản chiếu, cửa sổ Cài đặt (⌘,)
-- [x] Âm thanh Android (PCM thô từ scrcpy, phát qua AVAudioEngine, ghi AAC vào MP4) — tắt mặc định, bật trong Cài đặt; chưa kiểm chứng trên máy thật
+- [x] Âm thanh Android (PCM thô từ scrcpy, phát qua AVAudioEngine, ghi AAC vào MP4) — tắt mặc định, bật trong Cài đặt
 - [x] Kéo thả file vào cửa sổ Android: APK thì cài (`pm install -r`), file khác chép vào Download
 - [ ] Còn lại: âm thanh iPhone, adb qua Wi-Fi
 - [ ] Giai đoạn 5: đóng gói, ký và notarize
