@@ -28,9 +28,10 @@ enum UIPreview {
             .background(Color(white: 0.15))
             .environment(\.colorScheme, .dark)
         write(strip, size: NSSize(width: 66, height: 480), to: directory.appendingPathComponent("strip.png"))
+        renderSettings(into: directory)
     }
 
-    private static func write(_ view: some View, size: NSSize, to url: URL) {
+    static func write(_ view: some View, size: NSSize, to url: URL) {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .fullSizeContentView],
                               backing: .buffered, defer: false)
         let host = NSHostingView(rootView: view)
@@ -40,5 +41,12 @@ enum UIPreview {
         guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
         host.cacheDisplay(in: host.bounds, to: bitmap)
         try? bitmap.representation(using: .png, properties: [:])?.write(to: url)
+    }
+}
+
+extension UIPreview {
+    /// Also drawn by `--render-ui`: the settings form.
+    static func renderSettings(into directory: URL) {
+        write(SettingsView(), size: NSSize(width: 520, height: 460), to: directory.appendingPathComponent("settings.png"))
     }
 }

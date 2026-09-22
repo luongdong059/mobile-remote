@@ -27,6 +27,8 @@ struct MRCtl {
           scroll                      turn the mouse wheel over a point
           key                         press a navigation or hardware key
           type                        type text through the app's key translator
+          pinch                       two-finger pinch around a point (Android)
+          screen                      --off / --on: phone display power (Android)
 
         common options:
           -s, --serial SERIAL         device to use (default: the only USB device)
@@ -58,6 +60,8 @@ struct MRCtl {
           scroll --at X,Y [--dy TICKS] [--dx TICKS]   positive dy = wheel away from you
           key   --name back|home|recents|power|volume-up|volume-down
           type  --text TEXT [--enter]           ASCII via INJECT_TEXT, other via clipboard paste
+          pinch --at X,Y --scale F              F < 1 pinches in, > 1 spreads
+          screen --off | --on
         """
 
     static func main() {
@@ -80,6 +84,8 @@ struct MRCtl {
             case "scroll": try scroll(arguments)
             case "key": try key(arguments)
             case "type": try typeText(arguments)
+            case "pinch": try pinch(arguments)
+            case "screen": try screen(arguments)
             default: print(usage)
             }
         } catch {
@@ -436,6 +442,30 @@ struct MRCtl {
         }
     }
 
+    static func pinch(_ arguments: Arguments) throws {
+        let point = try arguments.point("at")
+        guard let scale = try arguments.string("scale").flatMap(Double.init) else { throw CLIError("'--scale' is required") }
+        try withControl(arguments) { translator, size, send in
+            try send(translator.pinchBegan(at: point, in: size))
+            let steps = 12
+            let perStep = pow(scale, 1 / Double(steps)) - 1
+            for _ in 0..<steps {
+                Thread.sleep(forTimeInterval: 0.03)
+                try send(translator.pinchChanged(by: CGFloat(perStep)))
+            }
+            try send(translator.pinchEnded())
+        }
+    }
+
+    static func screen(_ arguments: Arguments) throws {
+        let off = try arguments.string("off") != nil
+        let on = try arguments.string("on") != nil
+        guard off || on else { throw CLIError("pass --off or --on") }
+        try withControl(arguments) { _, _, send in
+            try send([.setDisplayPower(on: !off)])
+        }
+    }
+
     static func key(_ arguments: Arguments) throws {
         let names: [String: AndroidKeycode] = [
             "back": .back, "home": .home, "recents": .appSwitch, "power": .power,
@@ -583,7 +613,7 @@ struct Arguments {
     private var values: [String: String] = [:]
     private static let aliases = ["-s": "serial", "-o": "output"]
     /// Options that take no value.
-    private static let flags: Set<String> = ["enter"]
+    private static let flags: Set<String> = ["enter", "off", "on"]
 
     init(_ raw: [String]) throws {
         var iterator = raw.makeIterator()

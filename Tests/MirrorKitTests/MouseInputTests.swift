@@ -132,6 +132,36 @@ import Testing
         #expect(translator.scroll(at: point, in: view, deltaX: 0, deltaY: 0, isPrecise: true).isEmpty)
     }
 
+    @Test func pinchDrivesTwoFingersMirroredThroughTheCentre() {
+        var translator = translator()
+        // Anchor at (200, 400) in video pixels; centre is (540, 1170).
+        let began = translator.pinchBegan(at: CGPoint(x: 100, y: 200), in: view)
+        #expect(began.count == 2)
+        guard case .injectTouch(let action, let id, let first, _, _, _) = began[0],
+              case .injectTouch(_, let id2, let second, _, _, _) = began[1] else {
+            Issue.record("expected two touches"); return
+        }
+        #expect(action == .down && id == PointerID.mouse && id2 == PointerID.virtualFinger)
+        #expect(first == position(200, 400))
+        #expect(second == position(880, 1940)) // 2 × centre − anchor
+
+        // Spreading by 50 % moves both fingers further from the centre.
+        let moved = translator.pinchChanged(by: 0.5)
+        guard case .injectTouch(.move, _, let spread, _, _, _) = moved[0] else { Issue.record("expected a move"); return }
+        #expect(spread == position(30, 15)) // centre + 1.5 × (anchor − centre)
+
+        let ended = translator.pinchEnded()
+        #expect(ended.count == 2)
+        if case .injectTouch(let action, _, _, let pressure, _, _) = ended[0] { #expect(action == .up && pressure == 0) }
+        #expect(translator.pinchChanged(by: 0.1).isEmpty)
+    }
+
+    @Test func pinchIsIgnoredWhileAButtonIsDown() {
+        var translator = translator()
+        _ = translator.primaryDown(at: CGPoint(x: 100, y: 200), in: view)
+        #expect(translator.pinchBegan(at: CGPoint(x: 100, y: 200), in: view).isEmpty)
+    }
+
     @Test func otherButtonsNavigate() {
         let translator = translator()
         #expect(translator.secondaryDown(.right) == [.backOrScreenOn(action: .down)])

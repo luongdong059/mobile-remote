@@ -1,3 +1,4 @@
+import AppKit
 import AppleDeviceKit
 import Foundation
 import CoreGraphics
@@ -58,6 +59,15 @@ final class AndroidInputSink: MirrorInputSink {
 
     func perform(_ command: KeyCommand) {
         pipeline.send(KeyTranslator.messages(for: command, clipboardSequence: &clipboardSequence))
+    }
+
+    func magnify(phase: NSEvent.Phase, by magnification: CGFloat, at point: CGPoint, in viewSize: CGSize) {
+        switch phase {
+        case .began: pipeline.send(translator.pinchBegan(at: point, in: viewSize))
+        case .changed: pipeline.send(translator.pinchChanged(by: magnification))
+        case .ended, .cancelled: pipeline.send(translator.pinchEnded())
+        default: break
+        }
     }
 }
 
@@ -146,5 +156,9 @@ final class IOSInputSink: MirrorInputSink {
         case .escape: controller.pressButton("home")
         default: break // arrows, copy/cut/select-all: no equivalent through WebDriverAgent
         }
+    }
+
+    func magnify(phase: NSEvent.Phase, by magnification: CGFloat, at point: CGPoint, in viewSize: CGSize) {
+        // WebDriverAgent replays gestures whole; a live pinch has no place there yet.
     }
 }

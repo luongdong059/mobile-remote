@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var readyIDs: Set<String> = []
     private var pendingOpenSerial: String?
     private lazy var home = HomeWindowController(model: model)
+    private lazy var settingsWindow = SettingsWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let directory = settings.previewDirectory {
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onShow = { [weak self] in self?.mirrors[$0]?.bringToFront() }
         model.onClose = { [weak self] in self?.mirrors[$0]?.close() }
         home.show()
+        if settings.showSettings { settingsWindow.show() }
 
         let watcher = DeviceWatcher { [weak self] update in
             self?.handle(update)
@@ -104,7 +106,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             existing.bringToFront()
             return
         }
-        let mirror = MirrorWindowController(target: target, settings: settings)
+        // Re-read so the settings window's changes apply to new sessions.
+        let mirror = MirrorWindowController(target: target, settings: AppSettings.fromCommandLine())
         mirror.onClose = { [weak self] in
             self?.mirrors[target.id] = nil
             self?.model.mirroring.remove(target.id)
@@ -117,10 +120,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         home.show()
     }
 
+    @objc private func showSettings(_ sender: Any?) {
+        settingsWindow.show()
+    }
+
     private func makeMainMenu() -> NSMenu {
         let main = NSMenu()
 
         let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Cài đặt…", action: #selector(showSettings(_:)), keyEquivalent: ",").target = self
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Thoát Mobile Remote", action: #selector(NSApplication.terminate(_:)),
                         keyEquivalent: "q")
         main.addItem(submenu: appMenu)

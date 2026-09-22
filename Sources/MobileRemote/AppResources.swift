@@ -9,3 +9,14 @@ enum AppResources {
         return url.flatMap { NSImage(contentsOf: $0) }
     }()
 }
+
+import VideoKit
+
+/// Recording location, for views that must not import VideoKit's recorder.
+enum VideoKitRecordings {
+    static var directory: URL {
+        let url = ScreenRecorder.recordingsDirectory
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+}

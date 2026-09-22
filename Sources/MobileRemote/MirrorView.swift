@@ -19,6 +19,7 @@ protocol MirrorInputSink: AnyObject {
     /// Text as typed, including what the Mac's input method composed.
     func insertText(_ text: String)
     func perform(_ command: KeyCommand)
+    func magnify(phase: NSEvent.Phase, by magnification: CGFloat, at point: CGPoint, in viewSize: CGSize)
 }
 
 /// Shows the video with a status line until the first frame and short toasts,
@@ -238,6 +239,10 @@ final class MirrorView: NSView, @preconcurrency NSTextInputClient {
 
     override func otherMouseUp(with event: NSEvent) {
         if let button = Self.secondaryButton(for: event) { input?.secondaryUp(button) }
+    }
+
+    override func magnify(with event: NSEvent) {
+        input?.magnify(phase: event.phase, by: event.magnification, at: location(of: event), in: bounds.size)
     }
 
     override func scrollWheel(with event: NSEvent) {

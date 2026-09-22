@@ -14,6 +14,9 @@ public struct MouseTranslator {
     /// Nil until the first session packet; nothing is sent before that.
     public var mapper: VideoPointMapper?
     private var isTouching = false
+    /// While a trackpad pinch is in progress: the anchor under the pointer
+    /// and the current spread factor.
+    private var pinch: (anchor: CGPoint, scale: CGFloat)?
 
     /// Trackpad points per wheel tick. Android scrolls ~64 dp per tick, and a
     /// phone-sized window shows roughly 1 dp per point, so this runs a little
@@ -74,6 +77,54 @@ public struct MouseTranslator {
         guard horizontal != 0 || vertical != 0 else { return [] }
         return [.injectScroll(position: mapped.position, horizontal: horizontal, vertical: vertical,
                               buttons: isTouching ? .primary : [])]
+    }
+
+    // MARK: Trackpad pinch → two fingers
+
+    /// Like scrcpy's Ctrl+click: one finger under the pointer, a virtual
+    /// finger mirrored through the screen centre, both moving apart or
+    /// together as the pinch changes.
+    public mutating func pinchBegan(at point: CGPoint, in viewSize: CGSize) -> [ControlMessage] {
+        guard !isTouching, let mapped = mapper?.map(point, in: viewSize), mapped.isInside else { return [] }
+        let anchor = CGPoint(x: CGFloat(mapped.position.x), y: CGFloat(mapped.position.y))
+        pinch = (anchor, 1)
+        return fingers(action: .down)
+    }
+
+    /// `magnification` is AppKit's per-event delta (0.1 = 10 % larger).
+    public mutating func pinchChanged(by magnification: CGFloat) -> [ControlMessage] {
+        guard pinch != nil else { return [] }
+        pinch!.scale = max(0.2, pinch!.scale * (1 + magnification))
+        return fingers(action: .move)
+    }
+
+    public mutating func pinchEnded() -> [ControlMessage] {
+        guard pinch != nil else { return [] }
+        defer { pinch = nil }
+        return fingers(action: .up)
+    }
+
+    private func fingers(action: TouchAction) -> [ControlMessage] {
+        guard let pinch, let mapper else { return [] }
+        let centre = CGPoint(x: CGFloat(mapper.videoWidth) / 2, y: CGFloat(mapper.videoHeight) / 2)
+        // Both fingers sit on the line through the centre, `scale` times as far out.
+        let dx = (pinch.anchor.x - centre.x) * pinch.scale, dy = (pinch.anchor.y - centre.y) * pinch.scale
+        let first = clamp(CGPoint(x: centre.x + dx, y: centre.y + dy), mapper)
+        let second = clamp(CGPoint(x: centre.x - dx, y: centre.y - dy), mapper)
+        let pressure: Float = action == .up ? 0 : 1
+        let buttons: MouseButtons = action == .up ? [] : .primary
+        return [
+            .injectTouch(action: action, pointerID: PointerID.mouse, position: first, pressure: pressure,
+                         actionButton: action == .move ? [] : .primary, buttons: buttons),
+            .injectTouch(action: action, pointerID: PointerID.virtualFinger, position: second, pressure: pressure,
+                         actionButton: action == .move ? [] : .primary, buttons: buttons),
+        ]
+    }
+
+    private func clamp(_ point: CGPoint, _ mapper: VideoPointMapper) -> ScreenPosition {
+        ScreenPosition(x: Int32(min(max(point.x, 0), CGFloat(mapper.videoWidth - 1))),
+                       y: Int32(min(max(point.y, 0), CGFloat(mapper.videoHeight - 1))),
+                       screenWidth: UInt16(mapper.videoWidth), screenHeight: UInt16(mapper.videoHeight))
     }
 
     // MARK: Other buttons → navigation

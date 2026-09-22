@@ -2,7 +2,9 @@ import AppKit
 import Testing
 @testable import MirrorKit
 
-@Suite struct DeviceScreenshotTests {
+/// NSPasteboard is not thread-safe and Swift Testing runs suites in
+/// parallel; these tests must not overlap each other or anything else.
+@Suite(.serialized) @MainActor struct DeviceScreenshotTests {
     /// A 2x1 PNG, rendered here so the test does not depend on a device.
     private func samplePNG() throws -> Data {
         let bitmap = try #require(NSBitmapImageRep(

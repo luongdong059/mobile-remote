@@ -34,6 +34,7 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
     private var reconnectAttempts = 0
     /// Text we put on the Mac clipboard ourselves, to tell it from the user's.
     private var lastClipboardFromDevice: String?
+    private var isScreenOff = false
 
     init(target: MirrorTarget, settings: AppSettings) {
         self.target = target
@@ -86,6 +87,7 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
             controlKeys = DeviceKey.allCases
             refreshControls()
             pipeline.start()
+            isScreenOff = false
         case .ios(let device):
             let mirror = IOSScreenMirror(device: device, renderer: mirrorView.renderer, onEvent: onEvent)
             iosMirror = mirror
@@ -138,7 +140,7 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
     /// Rebuilds the strip; SwiftUI state lives here so the button follows the recording.
     private func refreshControls() {
         container.setControls(ControlStrip(
-            keys: controlKeys, isRecording: isRecording,
+            keys: controlKeys, isRecording: isRecording, isScreenOff: isScreenOff,
             onKey: { [weak self] key in self?.press(key) },
             onScreenshot: { [weak self] in self?.copyScreenshot(nil) },
             onRecord: { [weak self] in self?.toggleRecording(nil) }))
@@ -146,7 +148,17 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
 
     private func press(_ key: DeviceKey) {
         switch target {
-        case .android: pipeline?.send(ControlMessage.keyPress(key.androidKeycode))
+        case .android:
+            if key == .screenOff {
+                // The mirror keeps running with the phone's panel dark; scrcpy's
+                // cleanup turns it back on if the session ends.
+                isScreenOff.toggle()
+                pipeline?.send([.setDisplayPower(on: !isScreenOff)])
+                mirrorView.showToast(isScreenOff ? "Đã tắt màn hình điện thoại" : "Đã bật lại màn hình điện thoại")
+                refreshControls()
+            } else {
+                pipeline?.send(ControlMessage.keyPress(key.androidKeycode))
+            }
         case .ios: if let button = key.wdaButton { iosInput?.pressButton(button) }
         }
     }

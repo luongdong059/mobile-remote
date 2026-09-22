@@ -1,13 +1,15 @@
 import Foundation
 import ScrcpyKit
 
-/// Launch options, e.g. `MobileRemote --open SERIAL --codec h264 --max-size 1280 --stats`.
+/// Session options: saved preferences first, then command-line overrides
+/// such as `MobileRemote --open SERIAL --codec h264 --max-size 1280 --stats`.
 struct AppSettings {
     /// H.265 at full resolution kept 58 fps on the mid-range test phone where
     /// H.264 saturated at 50; phones without an HEVC encoder fall back to H.264.
     var codec: StreamCodec = .h265
     var maxSize = 1600
     var bitRate: Int?
+    var maxFps = 60
     /// Off only for comparing against the unrefreshed stream.
     var refreshesWhenSettled = true
     var printStats = false
@@ -18,9 +20,19 @@ struct AppSettings {
     var previewDirectory: String?
     /// Development aid: record this many seconds after the first frame, then stop.
     var autoRecordSeconds: Int?
+    /// Development aid: open the settings window at launch.
+    var showSettings = false
+
+    // UserDefaults keys, shared with the settings window.
+    static let codecKey = "videoCodec", maxSizeKey = "maxSize", bitRateKey = "videoBitRate", maxFpsKey = "maxFps"
 
     static func fromCommandLine(_ arguments: [String] = CommandLine.arguments) -> AppSettings {
         var settings = AppSettings()
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: codecKey) == "h264" { settings.codec = .h264 }
+        if defaults.object(forKey: maxSizeKey) != nil { settings.maxSize = defaults.integer(forKey: maxSizeKey) }
+        if defaults.integer(forKey: bitRateKey) > 0 { settings.bitRate = defaults.integer(forKey: bitRateKey) }
+        if defaults.integer(forKey: maxFpsKey) > 0 { settings.maxFps = defaults.integer(forKey: maxFpsKey) }
         var iterator = arguments.dropFirst().makeIterator()
         while let argument = iterator.next() {
             switch argument {
@@ -40,6 +52,8 @@ struct AppSettings {
                 settings.previewDirectory = iterator.next()
             case "--auto-record":
                 settings.autoRecordSeconds = iterator.next().flatMap(Int.init)
+            case "--show-settings":
+                settings.showSettings = true
             default:
                 break
             }
@@ -50,8 +64,9 @@ struct AppSettings {
     func serverOptions() -> ScrcpyServerOptions {
         var options = ScrcpyServerOptions()
         options.videoCodec = codec
-        options.maxSize = maxSize
+        options.maxSize = maxSize > 0 ? maxSize : nil
         options.videoBitRate = bitRate
+        options.maxFps = maxFps
         return options
     }
 }

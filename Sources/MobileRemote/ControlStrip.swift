@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Hardware / navigation keys the strip can offer.
 enum DeviceKey: CaseIterable {
-    case back, home, recents, volumeUp, volumeDown, power
+    case back, home, recents, volumeUp, volumeDown, power, screenOff
 
     var androidKeycode: AndroidKeycode {
         switch self {
@@ -13,6 +13,7 @@ enum DeviceKey: CaseIterable {
         case .volumeUp: return .volumeUp
         case .volumeDown: return .volumeDown
         case .power: return .power
+        case .screenOff: return .power // never sent: handled as a display-power toggle
         }
     }
 
@@ -23,7 +24,7 @@ enum DeviceKey: CaseIterable {
         case .volumeUp: return "volumeUp"
         case .volumeDown: return "volumeDown"
         case .power: return "lock"
-        case .back, .recents: return nil
+        case .back, .recents, .screenOff: return nil
         }
     }
 }
@@ -33,6 +34,7 @@ struct ControlStrip: View {
     /// Which keys to show; empty when the device takes no input.
     let keys: [DeviceKey]
     var isRecording = false
+    var isScreenOff = false
     let onKey: (DeviceKey) -> Void
     let onScreenshot: () -> Void
     let onRecord: () -> Void
@@ -41,7 +43,7 @@ struct ControlStrip: View {
         GlassGroup(spacing: 10) {
             VStack(spacing: 10) {
                 let navigation = keys.filter { [.back, .home, .recents].contains($0) }
-                let hardware = keys.filter { [.volumeUp, .volumeDown, .power].contains($0) }
+                let hardware = keys.filter { [.volumeUp, .volumeDown, .power, .screenOff].contains($0) }
                 if !navigation.isEmpty {
                     pill { ForEach(navigation, id: \.self) { key($0) } }
                 }
@@ -76,6 +78,7 @@ struct ControlStrip: View {
             case .volumeUp: return ("speaker.plus", "Tăng âm lượng")
             case .volumeDown: return ("speaker.minus", "Giảm âm lượng")
             case .power: return ("power", "Nguồn / khóa")
+            case .screenOff: return (isScreenOff ? "sun.max.fill" : "moon", isScreenOff ? "Bật lại màn hình điện thoại" : "Tắt màn hình điện thoại (vẫn phản chiếu)")
             }
         }()
         return icon(symbol, label) { onKey(key) }
