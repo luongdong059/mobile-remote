@@ -29,9 +29,15 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
     private var recordingTimer: Timer?
     private var controlKeys: [DeviceKey] = []
     private let autoRecordSeconds: Int?
+    private let settings: AppSettings
+    private var closing = false
+    private var reconnectAttempts = 0
+    /// Text we put on the Mac clipboard ourselves, to tell it from the user's.
+    private var lastClipboardFromDevice: String?
 
     init(target: MirrorTarget, settings: AppSettings) {
         self.target = target
+        self.settings = settings
         printStats = settings.printStats
         autoRecordSeconds = settings.autoRecordSeconds
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 840),
@@ -51,6 +57,18 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
         window.center()
         mirrorView.setStatus("Đang kết nối tới \(name)…")
 
+        connect()
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(mirrorView)
+    }
+
+    func close() {
+        window.close()
+    }
+
+    /// Starts (or restarts) the session behind the window.
+    private func connect() {
+        let settings = self.settings
         let onEvent: @Sendable (MirrorPipeline.Event) -> Void = { [weak self] event in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.handle(event) }
@@ -90,12 +108,31 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
             refreshControls()
             mirror.start()
         }
-        window.makeKeyAndOrderFront(nil)
-        window.makeFirstResponder(mirrorView)
     }
 
-    func close() {
-        window.close()
+    /// A session that ended while the device is still there (adb hiccup,
+    /// server crash) is started again a few times before giving up.
+    private func handleEnded(_ reason: String?) {
+        guard let reason else { return }
+        guard !closing, reconnectAttempts < 3 else {
+            mirrorView.setStatus(reason)
+            return
+        }
+        reconnectAttempts += 1
+        if printStats { print("[\(target.id)] ended: \(reason); reconnecting \(reconnectAttempts)/3") }
+        mirrorView.setStatus("Mất kết nối, đang thử lại (\(reconnectAttempts)/3)…")
+        pipeline?.stop()
+        pipeline = nil
+        iosMirror?.stop()
+        iosMirror = nil
+        iosInput?.stop()
+        iosInput = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, !self.closing else { return }
+                self.connect()
+            }
+        }
     }
 
     /// Rebuilds the strip; SwiftUI state lives here so the button follows the recording.
@@ -198,6 +235,7 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
             fitWindow(to: NSSize(width: width, height: height))
         case .firstFrame:
             mirrorView.setStatus(nil)
+            reconnectAttempts = 0
             if let seconds = autoRecordSeconds, !isRecording {
                 toggleRecording(nil)
                 DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(seconds)) { [weak self] in
@@ -209,7 +247,13 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
                 print(String(format: "[%@] %5.1f fps  %5.2f Mbps", target.id, framesPerSecond, megabitsPerSecond))
             }
         case .ended(let reason):
-            if let reason { mirrorView.setStatus(reason) }
+            handleEnded(reason)
+        case .clipboardChanged(let text):
+            guard text != lastClipboardFromDevice, !text.isEmpty else { return }
+            lastClipboardFromDevice = text
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            mirrorView.showToast("Đã chép văn bản từ điện thoại vào clipboard")
         case .recordingStarted:
             updateRecordingBadge()
             recordingTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -291,6 +335,7 @@ final class MirrorWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        closing = true
         pipeline?.stop()
         pipeline = nil
         iosMirror?.stop()

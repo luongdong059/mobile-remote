@@ -12,7 +12,7 @@ Phía điện thoại chạy `scrcpy-server` v4.1 (Apache-2.0, ghim cứng phiê
 - [x] Cửa sổ Home liệt kê thiết bị (mở, hiện, ngắt từng máy) và chép ảnh màn hình vào clipboard
 - [x] Giao diện Liquid Glass, logo và icon app, đóng gói thành `Mobile Remote.app`
 - [x] iPhone / iPad: phản chiếu màn hình qua USB (thiết bị screen-capture của CoreMediaIO); điều khiển qua WebDriverAgent (chạm, vuốt, cuộn, Home, âm lượng, khóa) — cần cài WDA một lần bằng `scripts/install-wda.sh`
-- [ ] Giai đoạn 3: bàn phím, clipboard, tự kết nối khi cắm máy
+- [x] Giai đoạn 3: bàn phím (kể cả tiếng Việt qua bộ gõ của macOS), clipboard hai chiều, tự kết nối lại khi rớt phiên
 - [x] Ghi màn hình ra MP4 (Android: chép thẳng luồng H.264/H.265, không nén lại; iPhone: nén HEVC phần cứng)
 - [ ] Giai đoạn 4: âm thanh, kéo thả file
 - [ ] Giai đoạn 5: đóng gói, ký và notarize
@@ -54,6 +54,7 @@ swift test
 .build/debug/mrctl swipe --from 540,1500 --to 540,1100 --ms 800
 .build/debug/mrctl scroll --at 540,1300 --dy -3
 .build/debug/mrctl key --name back
+.build/debug/mrctl type --text "xin chào" --enter
 ```
 
 Chạy `mrctl` không kèm tham số để xem đầy đủ tùy chọn.
@@ -91,9 +92,16 @@ Giao diện dùng Liquid Glass trên macOS 26. Trên macOS 14 và 15, các thàn
 | Nút chuột thứ 4 / thứ 5 | Đa nhiệm / mở bảng thông báo |
 | Dải nút bên phải màn hình | Back, Home, Đa nhiệm, âm lượng, nguồn |
 | Nút máy ảnh hoặc ⌃⌘C | Chép ảnh màn hình vào clipboard: PNG độ phân giải gốc, không qua nén video |
+| Gõ phím | Chữ được gửi sang máy. Android: ASCII qua `INJECT_TEXT`, ký tự khác (tiếng Việt) qua clipboard kèm lệnh dán, nên gõ được với Telex/VNI của macOS. iPhone: qua `/wda/keys` của WebDriverAgent |
+| Enter, Backspace, Delete, Tab, Esc, mũi tên, Home/End, PageUp/Down | Phím tương ứng trên Android (Esc = ESCAPE); iPhone chỉ có Enter, Backspace, Delete, Tab |
+| ⌘C / ⌘X | Android: sao chép / cắt trên máy, văn bản về clipboard của Mac (có thông báo) |
+| ⌘V | Dán clipboard của Mac vào máy |
+| ⌘A / ⌘Z / ⇧⌘Z | Chọn tất cả / hoàn tác / làm lại (Android, gửi như Ctrl+A/Z) |
 | Nút ghi hoặc ⌃⌘R | Bắt đầu / dừng ghi màn hình. File MP4 lưu vào `~/Movies/Mobile Remote/`, tên theo máy và thời điểm; menu Thiết bị › Mở thư mục ghi hình |
 
 Ghi hình không có âm thanh. Với Android, luồng video từ điện thoại được chép nguyên vào file (codec và độ phân giải đúng như đang phản chiếu, gần như không tốn CPU); ghi bắt đầu ở khung hình chính kế tiếp (app xin ngay, khoảng 0,2–1 giây) và tự dừng nếu màn hình đổi kích thước (xoay). Với iPhone, khung hình thô được nén HEVC phần cứng ở độ phân giải gốc, khoảng 12 Mbps.
+
+Android tự đồng bộ clipboard sang Mac mỗi khi bạn sao chép trên điện thoại. Khi phiên rớt mà máy vẫn cắm (adb khởi động lại, server chết), cửa sổ tự thử kết nối lại 3 lần, cách nhau 2 giây.
 
 Cửa sổ Home (⌘0) liệt kê mọi thiết bị adb, kể cả máy ảo và máy nối qua mạng. Tùy chọn “Tự động mở khi cắm máy qua USB” mặc định bật; tắt đi nếu muốn tự chọn máy để mở.
 

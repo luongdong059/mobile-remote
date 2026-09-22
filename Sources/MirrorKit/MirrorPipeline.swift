@@ -15,6 +15,8 @@ public final class MirrorPipeline: @unchecked Sendable {
         case stats(framesPerSecond: Double, megabitsPerSecond: Double)
         /// `reason` is nil when the pipeline was stopped on purpose.
         case ended(reason: String?)
+        /// The phone's clipboard changed (or ⌘C / ⌘X asked for it).
+        case clipboardChanged(String)
         case recordingStarted
         case recordingFinished(ScreenRecorder.Summary)
         /// Recording could not start or was cut short; the message says why.
@@ -145,11 +147,12 @@ public final class MirrorPipeline: @unchecked Sendable {
             }
         }
         if let control = session.controlSocket {
-            Thread.detachNewThread {
-                // Nothing consumes these yet, but leaving them unread would
-                // eventually block the server's sender.
+            Thread.detachNewThread { [onEvent] in
+                // Must be drained even when idle, or the server's sender blocks.
                 let reader = DeviceMessageReader(source: control)
-                while (try? reader.next()) != nil {}
+                while let message = try? reader.next() {
+                    if case .clipboard(let text) = message { onEvent(.clipboardChanged(text)) }
+                }
             }
         }
 

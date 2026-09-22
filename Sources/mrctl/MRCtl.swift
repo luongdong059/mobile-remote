@@ -26,6 +26,7 @@ struct MRCtl {
           swipe                       drag between two points
           scroll                      turn the mouse wheel over a point
           key                         press a navigation or hardware key
+          type                        type text through the app's key translator
 
         common options:
           -s, --serial SERIAL         device to use (default: the only USB device)
@@ -56,6 +57,7 @@ struct MRCtl {
           swipe --from X,Y --to X,Y [--ms N]   duration, default 300
           scroll --at X,Y [--dy TICKS] [--dx TICKS]   positive dy = wheel away from you
           key   --name back|home|recents|power|volume-up|volume-down
+          type  --text TEXT [--enter]           ASCII via INJECT_TEXT, other via clipboard paste
         """
 
     static func main() {
@@ -77,6 +79,7 @@ struct MRCtl {
             case "swipe": try swipe(arguments)
             case "scroll": try scroll(arguments)
             case "key": try key(arguments)
+            case "type": try typeText(arguments)
             default: print(usage)
             }
         } catch {
@@ -329,6 +332,7 @@ struct MRCtl {
                 print(String(format: "recorded %.1f s, %d frames (%d dropped) → %@", summary.duration, summary.frames,
                              summary.droppedFrames, summary.url.path))
             case .recordingFailed(let reason): print("recording failed: \(reason)")
+            case .clipboardChanged(let text): print("clipboard: \(text.prefix(60))")
             }
         }
         mirror.start()
@@ -420,6 +424,15 @@ struct MRCtl {
         let deltaX = CGFloat(try arguments.int("dx") ?? 0), deltaY = CGFloat(try arguments.int("dy") ?? 0)
         try withControl(arguments) { translator, size, send in
             try send(translator.scroll(at: point, in: size, deltaX: deltaX, deltaY: deltaY, isPrecise: false))
+        }
+    }
+
+    static func typeText(_ arguments: Arguments) throws {
+        guard let text = try arguments.string("text") else { throw CLIError("'--text' is required") }
+        try withControl(arguments) { _, _, send in
+            var sequence: UInt64 = 0
+            try send(KeyTranslator.messages(forTyped: text, clipboardSequence: &sequence))
+            if try arguments.string("enter") != nil { try send(KeyTranslator.messages(for: .enter, clipboardSequence: &sequence)) }
         }
     }
 
@@ -569,12 +582,15 @@ struct CLIError: Error, CustomStringConvertible {
 struct Arguments {
     private var values: [String: String] = [:]
     private static let aliases = ["-s": "serial", "-o": "output"]
+    /// Options that take no value.
+    private static let flags: Set<String> = ["enter"]
 
     init(_ raw: [String]) throws {
         var iterator = raw.makeIterator()
         while let argument = iterator.next() {
             guard let name = Self.aliases[argument] ?? (argument.hasPrefix("--") ? String(argument.dropFirst(2)) : nil)
             else { throw CLIError("unexpected argument '\(argument)'") }
+            if Self.flags.contains(name) { values[name] = "1"; continue }
             guard let value = iterator.next() else { throw CLIError("missing value for '\(argument)'") }
             values[name] = value
         }

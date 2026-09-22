@@ -16,13 +16,19 @@ protocol MirrorInputSink: AnyObject {
     func scroll(at point: CGPoint, in viewSize: CGSize, deltaX: CGFloat, deltaY: CGFloat, isPrecise: Bool)
     func secondaryDown(_ button: MouseTranslator.SecondaryButton)
     func secondaryUp(_ button: MouseTranslator.SecondaryButton)
+    /// Text as typed, including what the Mac's input method composed.
+    func insertText(_ text: String)
+    func perform(_ command: KeyCommand)
 }
 
 /// Shows the video with a status line until the first frame and short toasts,
 /// and forwards mouse activity to the input sink.
-final class MirrorView: NSView {
+final class MirrorView: NSView, @preconcurrency NSTextInputClient {
     let renderer = VideoLayerRenderer()
     var input: MirrorInputSink?
+    /// Text the input method is still composing (shown underlined in a text
+    /// view); sent only once it is committed.
+    private var marked = ""
 
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
     private let toast = NSHostingView(rootView: ToastView(text: ""))
@@ -121,6 +127,73 @@ final class MirrorView: NSView {
     func setVideoSize(width: Int, height: Int) {
         input?.videoSizeChanged(width: width, height: height)
     }
+
+    // MARK: Keyboard
+
+    override func keyDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command), let command = Self.shortcut(for: event) {
+            input?.perform(command)
+            return
+        }
+        // Lets the active input method (Telex, VNI, …) compose characters.
+        interpretKeyEvents([event])
+    }
+
+    private static func shortcut(for event: NSEvent) -> KeyCommand? {
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "c": return .copy
+        case "x": return .cut
+        case "v": return .paste(NSPasteboard.general.string(forType: .string) ?? "")
+        case "a": return .selectAll
+        case "z": return event.modifierFlags.contains(.shift) ? .redo : .undo
+        default: return nil
+        }
+    }
+
+    override func doCommand(by selector: Selector) {
+        let commands: [Selector: KeyCommand] = [
+            #selector(insertNewline(_:)): .enter, #selector(insertLineBreak(_:)): .enter,
+            #selector(deleteBackward(_:)): .backspace, #selector(deleteForward(_:)): .forwardDelete,
+            #selector(insertTab(_:)): .tab, #selector(cancelOperation(_:)): .escape,
+            #selector(moveUp(_:)): .up, #selector(moveDown(_:)): .down,
+            #selector(moveLeft(_:)): .left, #selector(moveRight(_:)): .right,
+            #selector(moveToBeginningOfLine(_:)): .home, #selector(moveToEndOfLine(_:)): .end,
+            #selector(moveToBeginningOfDocument(_:)): .home, #selector(moveToEndOfDocument(_:)): .end,
+            #selector(pageUp(_:)): .pageUp, #selector(pageDown(_:)): .pageDown,
+            #selector(scrollPageUp(_:)): .pageUp, #selector(scrollPageDown(_:)): .pageDown,
+        ]
+        if let command = commands[selector] { input?.perform(command) }
+    }
+
+    // NSTextInputClient: no text is stored here, the phone owns the field.
+    func insertText(_ string: Any, replacementRange: NSRange) {
+        let text = (string as? NSAttributedString)?.string ?? (string as? String) ?? ""
+        // The input method may replace characters it committed earlier.
+        if replacementRange.location != NSNotFound, replacementRange.length > 0 {
+            for _ in 0..<replacementRange.length { input?.perform(.backspace) }
+        }
+        marked = ""
+        input?.insertText(text)
+    }
+
+    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        marked = (string as? NSAttributedString)?.string ?? (string as? String) ?? ""
+    }
+
+    func unmarkText() {
+        marked = ""
+    }
+
+    func selectedRange() -> NSRange { NSRange(location: 0, length: 0) }
+    func markedRange() -> NSRange { marked.isEmpty ? NSRange(location: NSNotFound, length: 0) : NSRange(location: 0, length: marked.utf16.count) }
+    func hasMarkedText() -> Bool { !marked.isEmpty }
+    func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? { nil }
+    func validAttributesForMarkedText() -> [NSAttributedString.Key] { [] }
+    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
+        // Puts the input method's candidate window near the bottom of the screen.
+        window?.convertToScreen(convert(NSRect(x: bounds.midX, y: 40, width: 1, height: 20), to: nil)) ?? .zero
+    }
+    func characterIndex(for point: NSPoint) -> Int { 0 }
 
     // MARK: Mouse
 

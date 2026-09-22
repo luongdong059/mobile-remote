@@ -9,6 +9,7 @@ import ScrcpyKit
 final class AndroidInputSink: MirrorInputSink {
     private let pipeline: MirrorPipeline
     private var translator = MouseTranslator()
+    private var clipboardSequence: UInt64 = 0
 
     init(pipeline: MirrorPipeline) {
         self.pipeline = pipeline
@@ -49,6 +50,14 @@ final class AndroidInputSink: MirrorInputSink {
 
     func secondaryUp(_ button: MouseTranslator.SecondaryButton) {
         pipeline.send(translator.secondaryUp(button))
+    }
+
+    func insertText(_ text: String) {
+        pipeline.send(KeyTranslator.messages(forTyped: text, clipboardSequence: &clipboardSequence))
+    }
+
+    func perform(_ command: KeyCommand) {
+        pipeline.send(KeyTranslator.messages(for: command, clipboardSequence: &clipboardSequence))
     }
 }
 
@@ -121,4 +130,21 @@ final class IOSInputSink: MirrorInputSink {
     }
 
     func secondaryUp(_ button: MouseTranslator.SecondaryButton) {}
+
+    func insertText(_ text: String) {
+        controller.type(text)
+    }
+
+    /// XCUIKeyboardKey names WebDriverAgent understands inside `/wda/keys`.
+    func perform(_ command: KeyCommand) {
+        switch command {
+        case .enter: controller.type("\n")
+        case .backspace: controller.type("\u{8}")
+        case .forwardDelete: controller.type("\u{7f}")
+        case .tab: controller.type("\t")
+        case .paste(let text): controller.type(text)
+        case .escape: controller.pressButton("home")
+        default: break // arrows, copy/cut/select-all: no equivalent through WebDriverAgent
+        }
+    }
 }

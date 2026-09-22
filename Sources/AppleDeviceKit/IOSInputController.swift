@@ -171,6 +171,10 @@ public final class IOSInputController: @unchecked Sendable {
         let logURL = buildDirectory.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("wda-\(udid).log")
         let log = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
+        if log.contains("profile") && (log.contains("expired") || log.contains("has expired") || log.contains("no longer valid")) ||
+            log.contains("Provisioning profile") && log.contains("expired") {
+            return "Hồ sơ ký của WebDriverAgent đã hết hạn. Chạy lại scripts/install-wda.sh."
+        }
         if log.contains("not trusted") {
             return "iPhone chưa tin cậy nhà phát triển: Cài đặt › Cài đặt chung › VPN & Quản lý thiết bị."
         }
