@@ -38,6 +38,8 @@ struct MRCtl {
           --bit-rate BPS              video bit rate (default: server's 8000000)
           --log-level LEVEL           server log level: verbose|debug|info|warn|error
           --codec-options OPTS        scrcpy video_codec_options, e.g. video-qp-max=30
+          --audio                     stream: also receive audio (raw PCM), play it and
+                                      record it into --record
           --nudge on|off              wiggle a virtual mouse when a static screen
                                       yields no first frame (default on)
 
@@ -134,7 +136,28 @@ struct MRCtl {
         let kind: VideoCodecKind? = codec == .h264 ? .h264 : codec == .h265 ? .hevc : nil
         var recorder: ScreenRecorder?
         var recordFormat: CMVideoFormatDescription?
+        let audioStats = AudioStats()
+        if let audioSocket = session.audioSocket {
+            Thread.detachNewThread {
+                let demuxer = StreamDemuxer(source: audioSocket)
+                guard let codec = try? demuxer.readCodec() else { return }
+                print("audio codec: \(codec)")
+                let player = try? PCMPlayer()
+                while let packet = try? demuxer.nextPacket() {
+                    guard case .media(let media) = packet, !media.isConfig, let pts = media.pts else { continue }
+                    player?.enqueue(media.payload)
+                    audioStats.note(bytes: media.payload.count)
+                    audioStats.recorder?.appendAudio(media.payload, time: CMTime(value: CMTimeValue(pts), timescale: 1_000_000))
+                }
+                player?.stop()
+            }
+        }
         defer {
+            if let audioSocket = session.audioSocket {
+                _ = audioSocket
+                print(String(format: "audio: %d packets, %.0f kB, %d dropped by player", audioStats.packets,
+                             Double(audioStats.bytes) / 1024, 0))
+            }
             if let recorder, let summary = try? recorder.finish() {
                 print(String(format: "recorded %.1f s, %d frames (%d dropped) → %@", summary.duration, summary.frames,
                              summary.droppedFrames, summary.url.path))
@@ -177,7 +200,9 @@ struct MRCtl {
                     }
                     if let recordPath, let kind, let recordFormat {
                         if recorder == nil, media.isKeyFrame {
-                            recorder = try ScreenRecorder(url: URL(fileURLWithPath: recordPath), source: .compressed(recordFormat))
+                            recorder = try ScreenRecorder(url: URL(fileURLWithPath: recordPath), source: .compressed(recordFormat),
+                                                          audio: session.audioSocket != nil ? .init() : nil)
+                            audioStats.recorder = recorder
                         }
                         let sample = try SampleBuffers.sampleBuffer(codec: kind, payload: media.payload,
                                                                     ptsMicroseconds: media.pts ?? 0, format: recordFormat)
@@ -531,6 +556,7 @@ struct MRCtl {
         options.videoBitRate = try arguments.int("bit-rate")
         if let maxFps = try arguments.int("max-fps") { options.maxFps = maxFps }
         if let logLevel = try arguments.string("log-level") { options.logLevel = logLevel }
+        if try arguments.string("audio") != nil { options.audio = true }
         if let codecOptions = try arguments.string("codec-options") {
             options.extra["video_codec_options"] = codecOptions
         }
@@ -576,6 +602,20 @@ struct MRCtl {
     }
 }
 
+/// Audio packet counters shared with the audio thread.
+final class AudioStats: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _packets = 0, _bytes = 0
+    private var _recorder: ScreenRecorder?
+    var packets: Int { lock.withLock { _packets } }
+    var bytes: Int { lock.withLock { _bytes } }
+    var recorder: ScreenRecorder? {
+        get { lock.withLock { _recorder } }
+        set { lock.withLock { _recorder = newValue } }
+    }
+    func note(bytes: Int) { lock.withLock { _packets += 1; _bytes += bytes } }
+}
+
 /// The newest decoded picture, shared with the checkpoint thread.
 final class LatestFrame: @unchecked Sendable {
     private let lock = NSLock()
@@ -613,7 +653,7 @@ struct Arguments {
     private var values: [String: String] = [:]
     private static let aliases = ["-s": "serial", "-o": "output"]
     /// Options that take no value.
-    private static let flags: Set<String> = ["enter", "off", "on"]
+    private static let flags: Set<String> = ["enter", "off", "on", "audio"]
 
     init(_ raw: [String]) throws {
         var iterator = raw.makeIterator()

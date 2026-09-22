@@ -41,6 +41,7 @@ public final class MirrorPipeline: @unchecked Sendable {
     /// Set by `startRecording`; the reader turns it into a recorder at the
     /// next key frame, when it knows the stream format.
     private var pendingRecordingURL: URL?
+    private var player: PCMPlayer?
 
     /// `refreshesWhenSettled`: see `SettledPictureMonitor`.
     public init(adb: ADBClient = ADBClient(), serial: String, options: ScrcpyServerOptions,
@@ -146,6 +147,9 @@ public final class MirrorPipeline: @unchecked Sendable {
                 }
             }
         }
+        if let audio = session.audioSocket {
+            Thread.detachNewThread { [self] in playAudio(from: audio) }
+        }
         if let control = session.controlSocket {
             Thread.detachNewThread { [onEvent] in
                 // Must be drained even when idle, or the server's sender blocks.
@@ -240,12 +244,27 @@ public final class MirrorPipeline: @unchecked Sendable {
         if isRecording { stopRecording() }
     }
 
+    /// Raw 48 kHz stereo PCM from the phone, played as it arrives and copied
+    /// into any recording. Nothing arrives while the phone is silent.
+    private func playAudio(from socket: TCPSocket) {
+        let demuxer = StreamDemuxer(source: socket)
+        guard (try? demuxer.readCodec()) == .raw, let player = try? PCMPlayer() else { return }
+        lock.withLock { self.player = player }
+        defer { player.stop() }
+        while let packet = try? demuxer.nextPacket() {
+            guard case .media(let media) = packet, !media.isConfig, let pts = media.pts else { continue }
+            player.enqueue(media.payload)
+            lock.withLock { recorder }?.appendAudio(media.payload, time: CMTime(value: CMTimeValue(pts), timescale: 1_000_000))
+        }
+    }
+
     private func record(_ sample: CMSampleBuffer, isKeyFrame: Bool, format: CMVideoFormatDescription) {
         let recorder: ScreenRecorder? = lock.withLock {
             if let url = pendingRecordingURL, isKeyFrame {
                 pendingRecordingURL = nil
                 do {
-                    self.recorder = try ScreenRecorder(url: url, source: .compressed(format))
+                    self.recorder = try ScreenRecorder(url: url, source: .compressed(format),
+                                                       audio: options.audio ? .init() : nil)
                     onEvent(.recordingStarted)
                 } catch {
                     onEvent(.recordingFailed("\(error)"))

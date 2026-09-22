@@ -15,7 +15,8 @@ Phía điện thoại chạy `scrcpy-server` v4.1 (Apache-2.0, ghim cứng phiê
 - [x] Giai đoạn 3: bàn phím (kể cả tiếng Việt qua bộ gõ của macOS), clipboard hai chiều, tự kết nối lại khi rớt phiên
 - [x] Ghi màn hình ra MP4 (Android: chép thẳng luồng H.264/H.265, không nén lại; iPhone: nén HEVC phần cứng)
 - [x] Pinch-zoom bằng trackpad (Android), tắt màn hình điện thoại khi phản chiếu, cửa sổ Cài đặt (⌘,)
-- [ ] Giai đoạn 4: âm thanh, kéo thả file
+- [x] Âm thanh Android (PCM thô từ scrcpy, phát qua AVAudioEngine, ghi AAC vào MP4) — tắt mặc định, bật trong Cài đặt; chưa kiểm chứng trên máy thật
+- [ ] Giai đoạn 4: âm thanh iPhone, kéo thả file
 - [ ] Giai đoạn 5: đóng gói, ký và notarize
 
 ## Cấu trúc
@@ -47,6 +48,7 @@ swift test
 .build/debug/mrctl watch
 .build/debug/mrctl stream --seconds 10 --max-size 1280
 .build/debug/mrctl stream --seconds 10 --record clip.mp4    # ghi luồng Android ra MP4
+.build/debug/mrctl stream --seconds 10 --audio --record clip.mp4   # kèm âm thanh (Android 11+)
 .build/debug/mrctl snapshot --codec h265 -o snapshot.png
 .build/debug/mrctl screencap -o screencap.png        # ảnh PNG gốc do điện thoại tự chụp
 
@@ -101,11 +103,11 @@ Giao diện dùng Liquid Glass trên macOS 26. Trên macOS 14 và 15, các thàn
 | ⌘A / ⌘Z / ⇧⌘Z | Chọn tất cả / hoàn tác / làm lại (Android, gửi như Ctrl+A/Z) |
 | Nút ghi hoặc ⌃⌘R | Bắt đầu / dừng ghi màn hình. File MP4 lưu vào `~/Movies/Mobile Remote/`, tên theo máy và thời điểm; menu Thiết bị › Mở thư mục ghi hình |
 
-Ghi hình không có âm thanh. Với Android, luồng video từ điện thoại được chép nguyên vào file (codec và độ phân giải đúng như đang phản chiếu, gần như không tốn CPU); ghi bắt đầu ở khung hình chính kế tiếp (app xin ngay, khoảng 0,2–1 giây) và tự dừng nếu màn hình đổi kích thước (xoay). Với iPhone, khung hình thô được nén HEVC phần cứng ở độ phân giải gốc, khoảng 12 Mbps.
+Ghi hình có âm thanh khi bật âm thanh trong Cài đặt (Android). Với Android, luồng video từ điện thoại được chép nguyên vào file (codec và độ phân giải đúng như đang phản chiếu, gần như không tốn CPU); ghi bắt đầu ở khung hình chính kế tiếp (app xin ngay, khoảng 0,2–1 giây) và tự dừng nếu màn hình đổi kích thước (xoay). Với iPhone, khung hình thô được nén HEVC phần cứng ở độ phân giải gốc, khoảng 12 Mbps.
 
 Android tự đồng bộ clipboard sang Mac mỗi khi bạn sao chép trên điện thoại. Khi phiên rớt mà máy vẫn cắm (adb khởi động lại, server chết), cửa sổ tự thử kết nối lại 3 lần, cách nhau 2 giây.
 
-Cửa sổ Cài đặt (⌘,) chọn codec, độ phân giải, fps, bitrate cho các phiên Android mở sau đó, và bật/tắt tự động mở khi cắm máy.
+Cửa sổ Cài đặt (⌘,) chọn codec, độ phân giải, fps, bitrate và âm thanh cho các phiên Android mở sau đó, và bật/tắt tự động mở khi cắm máy. Âm thanh dùng codec `raw` (PCM 48 kHz stereo, ~1,5 Mbps) nên không cần bộ giải mã; cần Android 11 trở lên, máy cũ hơn tự tắt âm thanh. Khi bật, loa điện thoại im lặng vì âm được chuyển sang Mac (hành vi của scrcpy).
 
 Cửa sổ Home (⌘0) liệt kê mọi thiết bị adb, kể cả máy ảo và máy nối qua mạng. Tùy chọn “Tự động mở khi cắm máy qua USB” mặc định bật; tắt đi nếu muốn tự chọn máy để mở.
 

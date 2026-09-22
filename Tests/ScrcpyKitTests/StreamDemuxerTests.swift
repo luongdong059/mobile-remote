@@ -104,6 +104,15 @@ final class DataByteSource: ByteSource {
         ])
     }
 
+    @Test func audioAsksForRawPCMByDefault() {
+        var options = ScrcpyServerOptions(scid: 1)
+        options.audio = true
+        #expect(options.arguments().contains("audio_codec=raw"))
+        #expect(!options.arguments().contains("audio=false"))
+        options.audioCodec = .opus
+        #expect(!options.arguments().contains { $0.hasPrefix("audio_codec") })
+    }
+
     @Test func scidIsLimitedTo31Bits() {
         #expect(ScrcpyServerOptions(scid: 0xffff_ffff).scid == 0x7fff_ffff)
     }

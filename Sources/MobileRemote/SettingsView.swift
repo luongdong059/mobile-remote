@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.maxSizeKey) private var maxSize = 1600
     @AppStorage(AppSettings.bitRateKey) private var bitRate = 0
     @AppStorage(AppSettings.maxFpsKey) private var maxFps = 60
+    @AppStorage(AppSettings.audioKey) private var audio = false
     @AppStorage("autoOpenOnPlug") private var autoOpen = true
 
     var body: some View {
@@ -34,6 +35,7 @@ struct SettingsView: View {
                     Text("12 Mbps").tag(12_000_000)
                     Text("20 Mbps").tag(20_000_000)
                 }
+                Toggle("Phát âm thanh của điện thoại trên Mac (Android 11+, có ghi vào video)", isOn: $audio)
             }
             Section("Chung") {
                 Toggle("Tự động mở khi cắm máy qua USB", isOn: $autoOpen)
@@ -49,7 +51,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 440)
+        .frame(width: 520, height: 480)
     }
 }
 

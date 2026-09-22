@@ -10,6 +10,8 @@ struct AppSettings {
     var maxSize = 1600
     var bitRate: Int?
     var maxFps = 60
+    /// Off by default: it costs the phone ~0.6 core and takes its speaker.
+    var audio = false
     /// Off only for comparing against the unrefreshed stream.
     var refreshesWhenSettled = true
     var printStats = false
@@ -25,6 +27,7 @@ struct AppSettings {
 
     // UserDefaults keys, shared with the settings window.
     static let codecKey = "videoCodec", maxSizeKey = "maxSize", bitRateKey = "videoBitRate", maxFpsKey = "maxFps"
+    static let audioKey = "audioEnabled"
 
     static func fromCommandLine(_ arguments: [String] = CommandLine.arguments) -> AppSettings {
         var settings = AppSettings()
@@ -33,6 +36,7 @@ struct AppSettings {
         if defaults.object(forKey: maxSizeKey) != nil { settings.maxSize = defaults.integer(forKey: maxSizeKey) }
         if defaults.integer(forKey: bitRateKey) > 0 { settings.bitRate = defaults.integer(forKey: bitRateKey) }
         if defaults.integer(forKey: maxFpsKey) > 0 { settings.maxFps = defaults.integer(forKey: maxFpsKey) }
+        settings.audio = defaults.bool(forKey: audioKey)
         var iterator = arguments.dropFirst().makeIterator()
         while let argument = iterator.next() {
             switch argument {
@@ -44,6 +48,8 @@ struct AppSettings {
                 settings.bitRate = iterator.next().flatMap(Int.init)
             case "--no-settle-refresh":
                 settings.refreshesWhenSettled = false
+            case "--audio":
+                settings.audio = true
             case "--stats":
                 settings.printStats = true
             case "--open":
@@ -67,6 +73,7 @@ struct AppSettings {
         options.maxSize = maxSize > 0 ? maxSize : nil
         options.videoBitRate = bitRate
         options.maxFps = maxFps
+        options.audio = audio
         return options
     }
 }

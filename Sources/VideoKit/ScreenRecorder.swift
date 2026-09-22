@@ -35,10 +35,22 @@ public final class ScreenRecorder: @unchecked Sendable {
         }
     }
 
+    public struct AudioSource {
+        public let sampleRate: Double
+        public let channels: Int
+        public init(sampleRate: Double = 48_000, channels: Int = 2) {
+            self.sampleRate = sampleRate
+            self.channels = channels
+        }
+    }
+
     public let url: URL
     private let writer: AVAssetWriter
     private let input: AVAssetWriterInput
     private let adaptor: AVAssetWriterInputPixelBufferAdaptor?
+    private let audioInput: AVAssetWriterInput?
+    private let audioFormat: CMAudioFormatDescription?
+    private var audioFrames: Int64 = 0
     private let lock = NSLock()
     private var firstTime: CMTime?
     private var lastTime: CMTime?
@@ -46,7 +58,8 @@ public final class ScreenRecorder: @unchecked Sendable {
     private var dropped = 0
     private var finished = false
 
-    public init(url: URL, source: Source) throws {
+    /// `audio`: interleaved 16-bit PCM appended through `appendAudio`, saved as AAC.
+    public init(url: URL, source: Source, audio: AudioSource? = nil) throws {
         self.url = url
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: url)
@@ -78,6 +91,31 @@ public final class ScreenRecorder: @unchecked Sendable {
         input.expectsMediaDataInRealTime = true
         guard writer.canAdd(input) else { throw RecorderError.writer("định dạng không được hỗ trợ") }
         writer.add(input)
+
+        if let audio {
+            var asbd = AudioStreamBasicDescription(
+                mSampleRate: audio.sampleRate, mFormatID: kAudioFormatLinearPCM,
+                mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+                mBytesPerPacket: UInt32(2 * audio.channels), mFramesPerPacket: 1, mBytesPerFrame: UInt32(2 * audio.channels),
+                mChannelsPerFrame: UInt32(audio.channels), mBitsPerChannel: 16, mReserved: 0)
+            var description: CMAudioFormatDescription?
+            let status = CMAudioFormatDescriptionCreate(allocator: kCFAllocatorDefault, asbd: &asbd, layoutSize: 0, layout: nil,
+                                                        magicCookieSize: 0, magicCookie: nil, extensions: nil,
+                                                        formatDescriptionOut: &description)
+            guard status == noErr, let description else { throw RecorderError.writer("audio format") }
+            let aac = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: audio.sampleRate,
+                AVNumberOfChannelsKey: audio.channels, AVEncoderBitRateKey: 128_000,
+            ], sourceFormatHint: description)
+            aac.expectsMediaDataInRealTime = true
+            guard writer.canAdd(aac) else { throw RecorderError.writer("audio track") }
+            writer.add(aac)
+            audioInput = aac
+            audioFormat = description
+        } else {
+            audioInput = nil
+            audioFormat = nil
+        }
         guard writer.startWriting() else {
             throw RecorderError.writer(writer.error?.localizedDescription ?? "startWriting")
         }
@@ -109,6 +147,28 @@ public final class ScreenRecorder: @unchecked Sendable {
         write(at: time, isKeyFrame: true) { adaptor.append(pixelBuffer, withPresentationTime: time) }
     }
 
+    /// Interleaved 16-bit PCM. Audio before the first video frame is skipped,
+    /// so the tracks start together.
+    public func appendAudio(_ pcm: Data, time: CMTime) {
+        guard let audioInput, let audioFormat else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard !finished, writer.status == .writing, firstTime != nil, audioInput.isReadyForMoreMediaData else { return }
+        let bytesPerFrame = Int(audioFormat.audioStreamBasicDescription?.mBytesPerFrame ?? 4)
+        let frames = pcm.count / bytesPerFrame
+        guard frames > 0 else { return }
+        var block: CMBlockBuffer?
+        guard CMBlockBufferCreateWithMemoryBlock(allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: pcm.count,
+                                                 blockAllocator: kCFAllocatorDefault, customBlockSource: nil, offsetToData: 0,
+                                                 dataLength: pcm.count, flags: kCMBlockBufferAssureMemoryNowFlag, blockBufferOut: &block) == noErr,
+              let block, pcm.withUnsafeBytes({ CMBlockBufferReplaceDataBytes(with: $0.baseAddress!, blockBuffer: block, offsetIntoDestination: 0, dataLength: pcm.count) }) == noErr else { return }
+        var sample: CMSampleBuffer?
+        guard CMAudioSampleBufferCreateReadyWithPacketDescriptions(
+            allocator: kCFAllocatorDefault, dataBuffer: block, formatDescription: audioFormat, sampleCount: frames,
+            presentationTimeStamp: time, packetDescriptions: nil, sampleBufferOut: &sample) == noErr, let sample else { return }
+        audioInput.append(sample)
+    }
+
     private func write(at time: CMTime, isKeyFrame: Bool, _ body: () -> Bool) {
         lock.lock()
         defer { lock.unlock() }
@@ -137,6 +197,7 @@ public final class ScreenRecorder: @unchecked Sendable {
             throw RecorderError.notStarted
         }
         input.markAsFinished()
+        audioInput?.markAsFinished()
         let done = DispatchSemaphore(value: 0)
         writer.finishWriting { done.signal() }
         done.wait()

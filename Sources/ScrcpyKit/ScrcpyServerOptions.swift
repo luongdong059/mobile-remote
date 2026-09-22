@@ -11,6 +11,8 @@ public struct ScrcpyServerOptions: Sendable {
     public var audio = false
     public var control = true
     public var videoCodec: StreamCodec = .h264
+    /// Raw PCM needs no decoder on the Mac and costs ~1.5 Mbps over the cable.
+    public var audioCodec: StreamCodec = .raw
     public var videoBitRate: Int?
     /// Longest side in pixels. Native resolution saturates mid-range encoders.
     public var maxSize: Int?
@@ -40,6 +42,7 @@ public struct ScrcpyServerOptions: Sendable {
         if !audio { args.append("audio=false") }
         if !control { args.append("control=false") }
         if videoCodec != .h264 { args.append("video_codec=\(videoCodec.optionValue)") }
+        if audio, audioCodec != .opus { args.append("audio_codec=\(audioCodec.optionValue)") }
         if let videoBitRate { args.append("video_bit_rate=\(videoBitRate)") }
         if let maxSize { args.append("max_size=\(maxSize)") }
         if let maxFps { args.append("max_fps=\(maxFps)") }
