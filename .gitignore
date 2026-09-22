@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+dist/
+.swiftpm/
+xcuserdata/
+DerivedData/
+*.h264
+*.h265
+tools/bench/results.json
+tools/bench/*.log
+__pycache__/
