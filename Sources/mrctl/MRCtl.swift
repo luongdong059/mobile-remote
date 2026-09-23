@@ -36,6 +36,8 @@ struct MRCtl {
           connect                     --address IP[:PORT]: connect over TCP
           disconnect                  --address IP[:PORT]
           pair                        --address IP:PORT --code 123456 (Android 11+ pairing)
+          mdns                        devices the adb server sees on the network
+          reachable                   --address IP[:PORT]: quick TCP probe (1.5 s)
 
         common options:
           -s, --serial SERIAL         device to use (default: the only USB device)
@@ -102,6 +104,8 @@ struct MRCtl {
             case "connect": try connectTCP(arguments)
             case "disconnect": try disconnectTCP(arguments)
             case "pair": try pair(arguments)
+            case "mdns": try mdns()
+            case "reachable": try reachable(arguments)
             default: print(usage)
             }
         } catch {
@@ -565,6 +569,21 @@ struct MRCtl {
         let adb = ADBClient()
         try adb.ensureServerRunning()
         print(try adb.pair(address: address, code: code))
+    }
+
+    static func mdns() throws {
+        let adb = ADBClient()
+        try adb.ensureServerRunning()
+        let services = try adb.mdnsServices()
+        if services.isEmpty { print("  (none)") }
+        for service in services { print("  \(service.name)  \(service.type)  \(service.address)") }
+    }
+
+    static func reachable(_ arguments: Arguments) throws {
+        guard let address = try arguments.string("address") else { throw CLIError("'--address' is required") }
+        let started = Date()
+        let ok = ADBClient.isReachable(address)
+        print(String(format: "%@ %@ (%.0f ms)", address, ok ? "reachable" : "unreachable", since(started)))
     }
 
     static func key(_ arguments: Arguments) throws {

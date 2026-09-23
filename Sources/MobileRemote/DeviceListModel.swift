@@ -61,6 +61,16 @@ final class DeviceListModel {
     @ObservationIgnored var onDisconnect: (String) -> Void = { _ in }
     var wifiStatus: String?
     var wifiBusy = false
+    /// Devices reached over Wi-Fi before; shown even while offline.
+    var remembered: [RememberedDevice] = RememberedDevices.all
+    @ObservationIgnored var onReconnect: (RememberedDevice) -> Void = { _ in }
+    @ObservationIgnored var onForget: (RememberedDevice) -> Void = { _ in }
+
+    /// Remembered devices with no live adb entry right now.
+    var offlineRemembered: [RememberedDevice] {
+        let live = Set(androidDevices.map(\.serial))
+        return remembered.filter { !live.contains($0.address) && !live.contains($0.serial) }
+    }
 
     private static let autoOpenKey = "autoOpenOnPlug"
 

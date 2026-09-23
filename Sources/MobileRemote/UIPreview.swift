@@ -17,7 +17,8 @@ enum UIPreview {
         ]
         model.iosDevices = [IOSDevice(uid: "54E5A0BC", name: "DongNguyen")]
         model.mirroring = ["android:RFCW6067EBH"]
-        write(HomeView(model: model), size: NSSize(width: 560, height: 480), to: directory.appendingPathComponent("home.png"))
+        model.remembered = [RememberedDevice(serial: "R58M999XYZ", model: "SM S911B", address: "192.168.1.77:5555", lastConnected: Date())]
+        write(HomeView(model: model), size: NSSize(width: 580, height: 760), to: directory.appendingPathComponent("home.png"))
 
         let empty = DeviceListModel()
         write(HomeView(model: empty), size: NSSize(width: 560, height: 480),

@@ -121,12 +121,16 @@ Ba cách, đều trong thẻ "Kết nối Android qua Wi-Fi" ở cửa sổ Home
 - **Địa chỉ đã biết:** nhập `ip:port` (mặc định 5555) và bấm Kết nối.
 - **Ghép nối máy mới (Android 11+):** trên điện thoại vào Tùy chọn nhà phát triển › Gỡ lỗi qua Wi-Fi › Ghép nối bằng mã, nhập địa chỉ và mã hiện ra; sau đó kết nối bằng địa chỉ (cổng khác cổng ghép nối) ghi ở màn hình Gỡ lỗi qua Wi-Fi.
 
-Địa chỉ đã kết nối được ghi nhớ (tối đa 5) và tự thử lại khi mở app. Máy qua Wi-Fi hiện trong danh sách với nhãn "Wi-Fi", có nút "Ngắt Wi-Fi", và không tự mở cửa sổ. Chế độ TCP của adbd giữ tới khi điện thoại khởi động lại (hoặc `adb usb`).
+Máy đã kết nối qua Wi-Fi được **ghi nhớ** (tên, serial USB, địa chỉ; tối đa 10). Khi máy ngoại tuyến, Home vẫn hiện thẻ của nó với nút "Kết nối" và "Quên", và app tự thử lại mỗi 20 giây: trước hết hỏi mDNS của adb (`host:mdns:services`) để tìm máy theo serial, phòng khi địa chỉ hoặc cổng đổi (Gỡ lỗi qua Wi-Fi của Android 11+ đổi cổng sau mỗi lần khởi động lại), rồi mới thử địa chỉ đã lưu, sau một bước dò TCP 1,5 giây vì adb mất 75 giây để bỏ cuộc với địa chỉ chết. Máy qua Wi-Fi hiện nhãn "Wi-Fi", có nút "Ngắt Wi-Fi", và không tự mở cửa sổ.
+
+Giới hạn của Android: chế độ `tcpip 5555` mất khi điện thoại khởi động lại, khi đó phải cắm cáp lại một lần (hoặc dùng Gỡ lỗi qua Wi-Fi của Android 11+, giữ được sau khởi động lại khi đã ghép nối).
 
 ```sh
 .build/debug/mrctl wifi                          # tcpip + connect máy đang cắm
 .build/debug/mrctl connect --address 192.168.1.42
 .build/debug/mrctl pair --address 192.168.1.42:37211 --code 123456
+.build/debug/mrctl mdns                          # máy adb thấy trên mạng
+.build/debug/mrctl reachable --address 192.168.1.42
 ```
 
 Cửa sổ Home (⌘0) liệt kê mọi thiết bị adb, kể cả máy ảo và máy nối qua mạng. Tùy chọn “Tự động mở khi cắm máy qua USB” mặc định bật; tắt đi nếu muốn tự chọn máy để mở.

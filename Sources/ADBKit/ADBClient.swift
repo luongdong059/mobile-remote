@@ -160,6 +160,49 @@ public struct ADBClient: Sendable {
         return nil
     }
 
+    /// Devices the adb server has discovered on the local network:
+    /// `_adb._tcp` (adbd in tcpip mode) and `_adb-tls-connect._tcp`
+    /// (Android 11+ wireless debugging, whose port changes every session).
+    public struct MDNSService: Equatable, Sendable {
+        public let name: String
+        public let type: String
+        public let address: String
+    }
+
+    public func mdnsServices() throws -> [MDNSService] {
+        try hostReply("host:mdns:services").split(whereSeparator: \.isNewline).compactMap { line in
+            let fields = line.split(separator: "\t").map(String.init)
+            guard fields.count >= 3 else { return nil }
+            return MDNSService(name: fields[0], type: fields[1], address: fields[2])
+        }
+    }
+
+    /// True when something accepts TCP connections at `ip:port` within
+    /// `timeout`. The adb server itself waits 75 s on a dead address.
+    public static func isReachable(_ address: String, timeout: TimeInterval = 1.5) -> Bool {
+        let full = withPort(address)
+        guard let colon = full.lastIndex(of: ":"), let port = UInt16(full[full.index(after: colon)...]) else { return false }
+        let host = String(full[..<colon])
+        var hints = addrinfo(ai_flags: 0, ai_family: AF_INET, ai_socktype: SOCK_STREAM, ai_protocol: 0,
+                             ai_addrlen: 0, ai_canonname: nil, ai_addr: nil, ai_next: nil)
+        var info: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, String(port), &hints, &info) == 0, let first = info else { return false }
+        defer { freeaddrinfo(info) }
+        let fd = socket(first.pointee.ai_family, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+        let result = Darwin.connect(fd, first.pointee.ai_addr, first.pointee.ai_addrlen)
+        if result == 0 { return true }
+        guard errno == EINPROGRESS else { return false }
+        var writable = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+        guard poll(&writable, 1, Int32(timeout * 1000)) > 0 else { return false }
+        var error: Int32 = 0
+        var size = socklen_t(MemoryLayout<Int32>.size)
+        getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &size)
+        return error == 0
+    }
+
     public static func withPort(_ address: String) -> String {
         address.contains(":") ? address : address + ":5555"
     }

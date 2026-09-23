@@ -46,6 +46,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onDisconnect = { [weak self] address in
             self?.wifiAction("Đang ngắt \(address)…") { report in self?.wifi.disconnect(address, report: report) }
         }
+        model.onReconnect = { [weak self] device in
+            self?.wifiAction("Đang kết nối \(device.model ?? device.serial)…") { report in
+                self?.wifi.reconnect(device, onResult: report)
+            }
+        }
+        model.onForget = { [weak self] device in
+            RememberedDevices.forget(device.id)
+            self?.model.remembered = RememberedDevices.all
+        }
         home.show()
         if settings.showSettings { settingsWindow.show() }
 
@@ -54,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.watcher = watcher
         watcher.start()
-        wifi.reconnectSaved()
+        wifi.startReconnecting { [weak self] in self?.model.offlineRemembered ?? [] }
         let iosWatcher = IOSDeviceWatcher { [weak self] devices in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.handleIOS(devices) }
@@ -85,6 +94,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .devices(let devices):
             model.adbError = nil
             model.androidDevices = devices
+            // Any Wi-Fi device that shows up is worth remembering.
+            for device in devices where device.serial.contains(":") && device.state == .device {
+                let known = RememberedDevices.all.first { $0.address == device.serial }
+                RememberedDevices.remember(serial: known?.serial, model: device.model ?? known?.model, address: device.serial)
+            }
+            model.remembered = RememberedDevices.all
             reconcile()
         }
     }
@@ -139,6 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         start { [weak self] text, _ in
             self?.model.wifiBusy = false
             self?.model.wifiStatus = text
+            self?.model.remembered = RememberedDevices.all
         }
     }
 

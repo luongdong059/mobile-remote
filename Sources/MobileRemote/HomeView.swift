@@ -69,7 +69,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private var devices: some View {
-        if model.targets.isEmpty {
+        if model.targets.isEmpty && model.offlineRemembered.isEmpty {
             VStack(spacing: 10) {
                 Image(systemName: "cable.connector")
                     .font(.system(size: 34))
@@ -89,6 +89,9 @@ struct HomeView: View {
                     VStack(spacing: 10) {
                         ForEach(model.targets) { target in
                             DeviceCard(target: target, isMirroring: model.mirroring.contains(target.id), model: model)
+                        }
+                        ForEach(model.offlineRemembered) { device in
+                            OfflineDeviceCard(device: device, model: model)
                         }
                     }
                 }
@@ -246,5 +249,34 @@ private struct WiFiCard: View {
     private func connect() {
         guard !address.isEmpty else { return }
         model.onConnect(address)
+    }
+}
+
+/// A device known from an earlier Wi-Fi session that is not reachable now.
+private struct OfflineDeviceCard: View {
+    let device: RememberedDevice
+    let model: DeviceListModel
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "wifi.slash")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 40, height: 40)
+                .glass(in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(device.model ?? device.serial).font(.headline)
+                Text("\(device.address) · Android · Wi-Fi").font(.caption).foregroundStyle(.secondary)
+                Label("Ngoại tuyến — tự thử lại mỗi 20 giây", systemImage: "circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Button("Quên") { model.onForget(device) }.glassButton()
+            Button("Kết nối") { model.onReconnect(device) }.glassButton(prominent: true).disabled(model.wifiBusy)
+        }
+        .padding(14)
+        .glassCard(cornerRadius: 20)
+        .opacity(0.85)
     }
 }
