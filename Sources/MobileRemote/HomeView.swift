@@ -167,7 +167,7 @@ private struct DeviceCard: View {
         case .android(let device):
             let link = device.isUSB ? "USB" : device.serial.contains(":") ? "Wi-Fi" : "Máy ảo"
             return "\(device.serial) · Android · \(link)"
-        case .ios: return "iPhone / iPad · USB · chỉ xem, chưa điều khiển được"
+        case .ios: return "iPhone / iPad · USB · điều khiển qua WebDriverAgent"
         }
     }
 
