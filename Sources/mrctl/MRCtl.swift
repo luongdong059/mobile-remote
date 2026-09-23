@@ -31,6 +31,11 @@ struct MRCtl {
           screen                      --off / --on: phone display power (Android)
           push                        --file PATH: what a drop on the window does
                                       (APK → install, else → /sdcard/Download)
+          wifi                        switch the cabled device to Wi-Fi (tcpip + connect)
+          tcpip                       restart the cabled device's adbd on TCP port 5555 only
+          connect                     --address IP[:PORT]: connect over TCP
+          disconnect                  --address IP[:PORT]
+          pair                        --address IP:PORT --code 123456 (Android 11+ pairing)
 
         common options:
           -s, --serial SERIAL         device to use (default: the only USB device)
@@ -92,6 +97,11 @@ struct MRCtl {
             case "pinch": try pinch(arguments)
             case "screen": try screen(arguments)
             case "push": try push(arguments)
+            case "wifi": try wifi(arguments)
+            case "tcpip": try tcpip(arguments)
+            case "connect": try connectTCP(arguments)
+            case "disconnect": try disconnectTCP(arguments)
+            case "pair": try pair(arguments)
             default: print(usage)
             }
         } catch {
@@ -505,6 +515,56 @@ struct MRCtl {
         let outcome = AndroidFileTransfer.send(URL(fileURLWithPath: path), to: device.serial, adb: adb)
         print(String(format: "%@ (%.0f ms)", outcome.detail, since(started)))
         if !outcome.succeeded { exit(1) }
+    }
+
+    static func wifi(_ arguments: Arguments) throws {
+        let adb = ADBClient()
+        try adb.ensureServerRunning()
+        let device = try pickDevice(try adb.devices().filter(\.isUSB), requested: try arguments.string("serial"))
+        guard let address = try adb.wifiAddress(serial: device.serial) else {
+            throw CLIError("\(device.serial) has no Wi-Fi address; is the phone on Wi-Fi?")
+        }
+        print("wifi address \(address); enabling tcpip 5555…")
+        try adb.enableTCP(serial: device.serial)
+        // adbd takes a moment to come back on the new port.
+        var lastError: Error?
+        for _ in 0..<10 {
+            Thread.sleep(forTimeInterval: 0.5)
+            do {
+                print(try adb.connect(address: address))
+                return
+            } catch { lastError = error }
+        }
+        throw lastError ?? CLIError("connect failed")
+    }
+
+    static func tcpip(_ arguments: Arguments) throws {
+        let adb = ADBClient()
+        try adb.ensureServerRunning()
+        let device = try pickDevice(try adb.devices().filter(\.isUSB), requested: try arguments.string("serial"))
+        try adb.enableTCP(serial: device.serial)
+        print("adbd on \(device.serial) restarted in TCP mode on port 5555")
+    }
+
+    static func connectTCP(_ arguments: Arguments) throws {
+        guard let address = try arguments.string("address") else { throw CLIError("'--address' is required") }
+        let adb = ADBClient()
+        try adb.ensureServerRunning()
+        print(try adb.connect(address: address))
+    }
+
+    static func disconnectTCP(_ arguments: Arguments) throws {
+        guard let address = try arguments.string("address") else { throw CLIError("'--address' is required") }
+        print(try ADBClient().disconnect(address: address))
+    }
+
+    static func pair(_ arguments: Arguments) throws {
+        guard let address = try arguments.string("address"), let code = try arguments.string("code") else {
+            throw CLIError("'--address' and '--code' are required")
+        }
+        let adb = ADBClient()
+        try adb.ensureServerRunning()
+        print(try adb.pair(address: address, code: code))
     }
 
     static func key(_ arguments: Arguments) throws {

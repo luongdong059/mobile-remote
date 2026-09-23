@@ -53,6 +53,14 @@ final class DeviceListModel {
     @ObservationIgnored var onOpen: (MirrorTarget) -> Void = { _ in }
     @ObservationIgnored var onShow: (String) -> Void = { _ in }
     @ObservationIgnored var onClose: (String) -> Void = { _ in }
+    /// Wi-Fi: switch a cabled Android device to TCP, connect to an address,
+    /// pair (Android 11+), disconnect. Results arrive in `wifiStatus`.
+    @ObservationIgnored var onSwitchToWiFi: (ADBDevice) -> Void = { _ in }
+    @ObservationIgnored var onConnect: (String) -> Void = { _ in }
+    @ObservationIgnored var onPair: (String, String) -> Void = { _, _ in }
+    @ObservationIgnored var onDisconnect: (String) -> Void = { _ in }
+    var wifiStatus: String?
+    var wifiBusy = false
 
     private static let autoOpenKey = "autoOpenOnPlug"
 

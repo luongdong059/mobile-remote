@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingOpenSerial: String?
     private lazy var home = HomeWindowController(model: model)
     private lazy var settingsWindow = SettingsWindowController()
+    private let wifi = WiFiConnections()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let directory = settings.previewDirectory {
@@ -31,6 +32,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onOpen = { [weak self] in self?.openMirror(for: $0) }
         model.onShow = { [weak self] in self?.mirrors[$0]?.bringToFront() }
         model.onClose = { [weak self] in self?.mirrors[$0]?.close() }
+        model.onSwitchToWiFi = { [weak self] device in
+            self?.wifiAction("Đang chuyển \(device.model ?? device.serial) sang Wi-Fi…") { report in
+                self?.wifi.switchToWiFi(device, report: report)
+            }
+        }
+        model.onConnect = { [weak self] address in
+            self?.wifiAction("Đang kết nối \(address)…") { report in self?.wifi.connect(address, report: report) }
+        }
+        model.onPair = { [weak self] address, code in
+            self?.wifiAction("Đang ghép nối \(address)…") { report in self?.wifi.pair(address, code: code, report: report) }
+        }
+        model.onDisconnect = { [weak self] address in
+            self?.wifiAction("Đang ngắt \(address)…") { report in self?.wifi.disconnect(address, report: report) }
+        }
         home.show()
         if settings.showSettings { settingsWindow.show() }
 
@@ -39,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.watcher = watcher
         watcher.start()
+        wifi.reconnectSaved()
         let iosWatcher = IOSDeviceWatcher { [weak self] devices in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.handleIOS(devices) }
@@ -114,6 +130,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         mirrors[target.id] = mirror
         model.mirroring.insert(target.id)
+    }
+
+    /// Shows progress in the Wi-Fi card, then the outcome.
+    private func wifiAction(_ progress: String, _ start: (@escaping @MainActor @Sendable (String, Bool) -> Void) -> Void) {
+        model.wifiBusy = true
+        model.wifiStatus = progress
+        start { [weak self] text, _ in
+            self?.model.wifiBusy = false
+            self?.model.wifiStatus = text
+        }
     }
 
     @objc private func showHome(_ sender: Any?) {

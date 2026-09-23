@@ -107,6 +107,71 @@ public struct ADBClient: Sendable {
         throw ADBError.requestFailed(request: "push \(remotePath)", message: detail)
     }
 
+    // MARK: Wi-Fi
+
+    /// Asks the adb server to connect to a device listening on TCP
+    /// (`ip:port`, port 5555 by default). The reply is the server's own
+    /// wording ("connected to …", "already connected …", or a failure).
+    @discardableResult
+    public func connect(address: String) throws -> String {
+        let reply = try hostReply("host:connect:\(Self.withPort(address))")
+        guard reply.hasPrefix("connected") || reply.hasPrefix("already connected") else {
+            throw ADBError.requestFailed(request: "connect \(address)", message: reply)
+        }
+        return reply
+    }
+
+    @discardableResult
+    public func disconnect(address: String) throws -> String {
+        try hostReply("host:disconnect:\(Self.withPort(address))")
+    }
+
+    /// Android 11+ wireless debugging: the phone shows an address and a
+    /// six-digit code under Settings › Developer options › Wireless debugging.
+    @discardableResult
+    public func pair(address: String, code: String) throws -> String {
+        let reply = try hostReply("host:pair:\(code):\(address)")
+        guard reply.hasPrefix("Successfully paired") else {
+            throw ADBError.requestFailed(request: "pair \(address)", message: reply)
+        }
+        return reply
+    }
+
+    /// Restarts the device's adbd listening on TCP. The USB session stays;
+    /// the device then also accepts `connect(address:)` on its Wi-Fi address.
+    public func enableTCP(serial: String, port: Int = 5555) throws {
+        let socket = try openService(serial: serial, "tcpip:\(port)")
+        defer { socket.close() }
+        let reply = String(decoding: try socket.read(upTo: 256), as: UTF8.self)
+        guard reply.contains("restarting") else {
+            throw ADBError.requestFailed(request: "tcpip \(port)", message: reply)
+        }
+    }
+
+    /// The device's Wi-Fi IPv4 address, or nil when it is not on Wi-Fi.
+    public func wifiAddress(serial: String) throws -> String? {
+        let output = try run(serial: serial, "ip -o -4 addr show scope global")
+        // Lines like: "24: wlan0    inet 192.168.1.42/24 brd … scope global wlan0"
+        for line in output.split(whereSeparator: \.isNewline) {
+            let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+            guard fields.count >= 4, fields[1].hasPrefix("wlan") || fields[1].hasPrefix("swlan") else { continue }
+            return String(fields[3].split(separator: "/")[0])
+        }
+        return nil
+    }
+
+    public static func withPort(_ address: String) -> String {
+        address.contains(":") ? address : address + ":5555"
+    }
+
+    /// Host services that answer OKAY then a length-prefixed text.
+    private func hostReply(_ request: String) throws -> String {
+        let socket = try connect()
+        defer { socket.close() }
+        try send(request, on: socket)
+        return try readLengthPrefixed(socket).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     // MARK: Wire helpers
 
     private func connect() throws -> TCPSocket {

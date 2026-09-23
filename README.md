@@ -17,7 +17,8 @@ Phía điện thoại chạy `scrcpy-server` v4.1 (Apache-2.0, ghim cứng phiê
 - [x] Pinch-zoom bằng trackpad (Android), tắt màn hình điện thoại khi phản chiếu, cửa sổ Cài đặt (⌘,)
 - [x] Âm thanh Android (PCM thô từ scrcpy, phát qua AVAudioEngine, ghi AAC vào MP4) — tắt mặc định, bật trong Cài đặt
 - [x] Kéo thả file vào cửa sổ Android: APK thì cài (`pm install -r`), file khác chép vào Download
-- [ ] Còn lại: âm thanh iPhone, adb qua Wi-Fi
+- [x] adb qua Wi-Fi: chuyển máy đang cắm USB sang Wi-Fi bằng một nút, kết nối theo địa chỉ, ghép nối Android 11+, tự kết nối lại địa chỉ đã dùng khi mở app
+- [ ] Còn lại: âm thanh iPhone
 - [ ] Giai đoạn 5: đóng gói, ký và notarize
 
 ## Cấu trúc
@@ -111,6 +112,22 @@ Ghi hình có âm thanh khi bật âm thanh trong Cài đặt (Android). Với A
 Android tự đồng bộ clipboard sang Mac mỗi khi bạn sao chép trên điện thoại. Khi phiên rớt mà máy vẫn cắm (adb khởi động lại, server chết), cửa sổ tự thử kết nối lại 3 lần, cách nhau 2 giây.
 
 Cửa sổ Cài đặt (⌘,) chọn codec, độ phân giải, fps, bitrate và âm thanh cho các phiên Android mở sau đó, và bật/tắt tự động mở khi cắm máy. Âm thanh dùng codec `raw` (PCM 48 kHz stereo, ~1,5 Mbps) nên không cần bộ giải mã; cần Android 11 trở lên, máy cũ hơn tự tắt âm thanh. Khi bật, loa điện thoại im lặng vì âm được chuyển sang Mac (hành vi của scrcpy).
+
+### Kết nối Android qua Wi-Fi
+
+Ba cách, đều trong thẻ "Kết nối Android qua Wi-Fi" ở cửa sổ Home:
+
+- **Máy đang cắm USB:** bấm nút Wi-Fi trên thẻ của máy. App chạy `tcpip 5555` rồi `connect` tới địa chỉ Wi-Fi của máy; xong là rút cáp được. Máy và Mac phải cùng mạng, và điện thoại phải đang nối Wi-Fi.
+- **Địa chỉ đã biết:** nhập `ip:port` (mặc định 5555) và bấm Kết nối.
+- **Ghép nối máy mới (Android 11+):** trên điện thoại vào Tùy chọn nhà phát triển › Gỡ lỗi qua Wi-Fi › Ghép nối bằng mã, nhập địa chỉ và mã hiện ra; sau đó kết nối bằng địa chỉ (cổng khác cổng ghép nối) ghi ở màn hình Gỡ lỗi qua Wi-Fi.
+
+Địa chỉ đã kết nối được ghi nhớ (tối đa 5) và tự thử lại khi mở app. Máy qua Wi-Fi hiện trong danh sách với nhãn "Wi-Fi", có nút "Ngắt Wi-Fi", và không tự mở cửa sổ. Chế độ TCP của adbd giữ tới khi điện thoại khởi động lại (hoặc `adb usb`).
+
+```sh
+.build/debug/mrctl wifi                          # tcpip + connect máy đang cắm
+.build/debug/mrctl connect --address 192.168.1.42
+.build/debug/mrctl pair --address 192.168.1.42:37211 --code 123456
+```
 
 Cửa sổ Home (⌘0) liệt kê mọi thiết bị adb, kể cả máy ảo và máy nối qua mạng. Tùy chọn “Tự động mở khi cắm máy qua USB” mặc định bật; tắt đi nếu muốn tự chọn máy để mở.
 

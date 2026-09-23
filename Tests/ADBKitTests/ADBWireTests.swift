@@ -47,3 +47,10 @@ import Testing
         #expect(ADBDevice.parseList("").isEmpty)
     }
 }
+
+@Suite struct ADBWiFiTests {
+    @Test func defaultPortIsAppended() {
+        #expect(ADBClient.withPort("192.168.1.42") == "192.168.1.42:5555")
+        #expect(ADBClient.withPort("192.168.1.42:37211") == "192.168.1.42:37211")
+    }
+}

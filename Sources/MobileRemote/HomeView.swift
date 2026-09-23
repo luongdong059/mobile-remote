@@ -18,13 +18,14 @@ struct HomeView: View {
                         .glassCard(cornerRadius: 14)
                 }
                 devices
+                WiFiCard(model: model)
                 footer
             }
             .padding(.horizontal, 20)
             .padding(.top, 40) // clears the transparent title bar
             .padding(.bottom, 18)
         }
-        .frame(minWidth: 540, minHeight: 440)
+        .frame(minWidth: 560, minHeight: 560)
         .ignoresSafeArea()
     }
 
@@ -137,6 +138,15 @@ private struct DeviceCard: View {
                 Button("Hiện cửa sổ") { model.onShow(target.id) }.glassButton()
                 Button("Ngắt") { model.onClose(target.id) }.glassButton()
             } else if target.isReady {
+                if case .android(let device) = target, device.isUSB {
+                    Button { model.onSwitchToWiFi(device) } label: { Image(systemName: "wifi") }
+                        .glassButton()
+                        .help("Chuyển máy này sang kết nối Wi-Fi (adb tcpip)")
+                        .disabled(model.wifiBusy)
+                }
+                if case .android(let device) = target, !device.isUSB, device.serial.contains(":") {
+                    Button("Ngắt Wi-Fi") { model.onDisconnect(device.serial) }.glassButton()
+                }
                 Button("Mở") { model.onOpen(target) }
                     .glassButton(prominent: true)
             }
@@ -154,7 +164,9 @@ private struct DeviceCard: View {
 
     private var subtitle: String {
         switch target {
-        case .android(let device): return "\(device.serial) · Android · \(device.isUSB ? "USB" : "Mạng / máy ảo")"
+        case .android(let device):
+            let link = device.isUSB ? "USB" : device.serial.contains(":") ? "Wi-Fi" : "Máy ảo"
+            return "\(device.serial) · Android · \(link)"
         case .ios: return "iPhone / iPad · USB · chỉ xem, chưa điều khiển được"
         }
     }
@@ -176,5 +188,63 @@ private struct DeviceCard: View {
                 return (raw, .secondary)
             }
         }
+    }
+}
+
+/// Connect to an Android device over the network, or pair a new one.
+private struct WiFiCard: View {
+    let model: DeviceListModel
+    @State private var address = ""
+    @State private var pairingAddress = ""
+    @State private var pairingCode = ""
+    @State private var showsPairing = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Kết nối Android qua Wi-Fi", systemImage: "wifi").font(.headline)
+                Spacer()
+                Button(showsPairing ? "Ẩn ghép nối" : "Ghép nối máy mới…") { showsPairing.toggle() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+            HStack {
+                TextField("192.168.1.42:5555", text: $address)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { connect() }
+                Button("Kết nối") { connect() }
+                    .glassButton(prominent: true)
+                    .disabled(address.isEmpty || model.wifiBusy)
+            }
+            if showsPairing {
+                Text("Trên điện thoại: Cài đặt › Tùy chọn nhà phát triển › Gỡ lỗi qua Wi-Fi › Ghép nối thiết bị bằng mã. Nhập địa chỉ và mã hiện ra ở đó.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    TextField("192.168.1.42:37211", text: $pairingAddress).textFieldStyle(.roundedBorder)
+                    TextField("Mã 6 số", text: $pairingCode).textFieldStyle(.roundedBorder).frame(width: 90)
+                    Button("Ghép nối") { model.onPair(pairingAddress, pairingCode) }
+                        .glassButton()
+                        .disabled(pairingAddress.isEmpty || pairingCode.count != 6 || model.wifiBusy)
+                }
+            }
+            if let status = model.wifiStatus {
+                HStack(spacing: 6) {
+                    if model.wifiBusy { ProgressView().controlSize(.small) }
+                    Text(status).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Text("Máy đang cắm USB: bấm nút Wi-Fi trên thẻ của máy để chuyển sang kết nối không dây; máy và Mac phải cùng mạng.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(14)
+        .glassCard(cornerRadius: 20)
+    }
+
+    private func connect() {
+        guard !address.isEmpty else { return }
+        model.onConnect(address)
     }
 }
