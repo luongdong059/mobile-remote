@@ -133,6 +133,8 @@ Giới hạn của Android: chế độ `tcpip 5555` mất khi điện thoại k
 .build/debug/mrctl reachable --address 192.168.1.42
 ```
 
+Biểu tượng trên **menu bar** (hình điện thoại, đơn sắc theo chuẩn macOS) mở menu liệt kê thiết bị: bấm tên máy để mở hoặc hiện cửa sổ phản chiếu, máy ngoại tuyến có mục kết nối lại; kèm Danh sách thiết bị, Cài đặt và Thoát. Nhờ biểu tượng này, đóng hết cửa sổ thì app vẫn chạy nền để theo dõi thiết bị; thoát bằng menu hoặc ⌘Q.
+
 Cửa sổ Home (⌘0) liệt kê mọi thiết bị adb, kể cả máy ảo và máy nối qua mạng. Tùy chọn “Tự động mở khi cắm máy qua USB” mặc định bật; tắt đi nếu muốn tự chọn máy để mở.
 
 ## iPhone / iPad

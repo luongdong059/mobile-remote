@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var home = HomeWindowController(model: model)
     private lazy var settingsWindow = SettingsWindowController()
     private let wifi = WiFiConnections()
+    private var statusBar: StatusBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let directory = settings.previewDirectory {
@@ -55,6 +56,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             RememberedDevices.forget(device.id)
             self?.model.remembered = RememberedDevices.all
         }
+        statusBar = StatusBarController(model: model, showHome: { [weak self] in self?.home.show() },
+                                        showSettings: { [weak self] in self?.settingsWindow.show() })
         home.show()
         if settings.showSettings { settingsWindow.show() }
 
@@ -74,8 +77,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// The menu bar item keeps the app running with every window closed.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
